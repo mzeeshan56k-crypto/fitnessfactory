@@ -100,7 +100,7 @@ export default function LibraryPage() {
         {app.exercises.length === 0 ? (
           <p className="mt-5 rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-5 text-center text-sm text-ink-500">
             No exercises in the global library yet. Coaches add exercises from the Training section,
-            or load example data to populate it.
+            or use Load starter content in Settings → Data.
           </p>
         ) : (
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -484,11 +484,11 @@ export default function SettingsPage() {
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="label">App name</label>
-                  <input className="input" defaultValue="FitForge" />
+                  <input className="input" defaultValue="Fitness Factory KC" />
                 </div>
                 <div>
                   <label className="label">Support email</label>
-                  <input className="input" type="email" defaultValue="support@fitforge.app" />
+                  <input className="input" type="email" defaultValue="support@fitnessfactorykc.com" />
                 </div>
               </div>
 

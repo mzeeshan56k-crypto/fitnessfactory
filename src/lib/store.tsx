@@ -10,7 +10,6 @@ import type {
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
 } from "@/lib/platform";
-import { sampleData } from "@/lib/samples";
 import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms } from "@/lib/seed-content";
 
 export function uid(prefix = "id") {
@@ -94,7 +93,7 @@ const emptyDB: DB = {
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
-    businessName: "Your Coaching Business",
+    businessName: "Fitness Factory KC",
     brandColor: "#1b82f5",
     autoUpdates: { workouts: false, nutrition: false, checkins: false },
   },
@@ -108,7 +107,6 @@ interface AppContextValue extends DB {
   hydrated: boolean;
   // generic
   set: (patch: Partial<DB>) => void;
-  seedSampleData: () => void;
   loadStarterContent: () => void;
   resetAll: () => void;
   // forms
@@ -185,10 +183,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [db, hydrated]);
 
   const set = useCallback((patch: Partial<DB>) => setDb((d) => ({ ...d, ...patch })), []);
-
-  const seedSampleData = useCallback(() => {
-    setDb({ ...sampleData, seeded: true });
-  }, []);
 
   // Loads the pre-built library (exercises, workouts, programs, forms) WITHOUT
   // demo clients — gives a coach a ready-to-use catalog on an empty workspace.
@@ -429,7 +423,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppContextValue>(() => ({
     ...db, hydrated,
-    set, seedSampleData, loadStarterContent, resetAll,
+    set, loadStarterContent, resetAll,
     addForm, updateForm, removeForm,
     addClient, updateClient, removeClient, setCurrentClient,
     addExercise, removeExercise,
@@ -446,7 +440,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addBroadcast,
     updateSettings,
   }), [
-    db, hydrated, set, seedSampleData, loadStarterContent, resetAll, addForm, updateForm, removeForm,
+    db, hydrated, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
     setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,

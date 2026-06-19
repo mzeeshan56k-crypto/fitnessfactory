@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   const model = body.model?.trim() || DEFAULT_MODELS[provider];
   const sys =
     system ||
-    "You are FitForge AI Copilot, an expert fitness and nutrition coaching assistant. Be concise, practical and motivating. Use markdown when helpful.";
+    "You are the Fitness Factory KC AI Copilot, an expert fitness and nutrition coaching assistant. Be concise, practical and motivating. Use markdown when helpful.";
 
   try {
     let text = "";

@@ -18,16 +18,8 @@ export interface ComplianceRow {
 
 export const complianceRates = { workout: 88, diet: 81, habits: 76 };
 
-export const complianceRows: ComplianceRow[] = [
-  { clientId: "c1", workout: 94, diet: 90, habits: 88, trend: "up", light: "green", note: "Crushing it — consider progressing load." },
-  { clientId: "c2", workout: 88, diet: 72, habits: 80, trend: "up", light: "green", note: "Strong adherence, diet logging slipping midweek." },
-  { clientId: "c3", workout: 91, diet: 84, habits: 70, trend: "flat", light: "yellow", note: "Habit streaks dropping — nudge on sleep." },
-  { clientId: "c4", workout: 12, diet: 0, habits: 5, trend: "down", light: "red", note: "Never completed onboarding workout." },
-  { clientId: "c5", workout: 96, diet: 93, habits: 95, trend: "up", light: "green", note: "Model client. Request a testimonial." },
-  { clientId: "c6", workout: 41, diet: 38, habits: 30, trend: "down", light: "red", note: "Inactive 3 weeks — schedule a re-engagement call." },
-  { clientId: "c7", workout: 90, diet: 66, habits: 72, trend: "down", light: "yellow", note: "Training great, nutrition off-plan on weekends." },
-  { clientId: "c8", workout: 79, diet: 70, habits: 64, trend: "flat", light: "yellow", note: "Plateauing — review program variables." },
-];
+// Derived per-client in the auditing page from real client adherence.
+export const complianceRows: ComplianceRow[] = [];
 
 /* ------------------------------- Kanban ------------------------------- */
 
@@ -88,36 +80,8 @@ export interface AISuggestion {
   status: "pending" | "approved" | "dismissed";
 }
 
-export const aiSuggestions: AISuggestion[] = [
-  {
-    id: "s1", clientId: "c1", type: "Program",
-    title: "Progress bench press +5 lb",
-    rationale: "Logged RPE ≤ 7 on all top sets for 2 weeks with full rep completion.",
-    draft: "Increase Bench Press working weight from 155 → 160 lb. Keep 3×6 @ RPE 8 target.",
-    confidence: 92, status: "pending",
-  },
-  {
-    id: "s2", clientId: "c7", type: "Nutrition",
-    title: "Adjust weekend macro split",
-    rationale: "Diet compliance drops to 48% on Sat/Sun vs 90% weekdays.",
-    draft: "Introduce a flexible weekend template: +30g carbs, refeed structure to improve adherence.",
-    confidence: 84, status: "pending",
-  },
-  {
-    id: "s3", clientId: "c6", type: "Message",
-    title: "Re-engagement outreach",
-    rationale: "No activity in 21 days, habit streak broken, at-risk (red) flag.",
-    draft: "Hey Noah — missed seeing you this month! Let's hop on a quick 15-min call to reset your plan. What day works?",
-    confidence: 88, status: "pending",
-  },
-  {
-    id: "s4", clientId: "c3", type: "Recovery",
-    title: "Insert deload week",
-    rationale: "Sleep quality down 18% and reported RPE rising on steady-state runs.",
-    draft: "Schedule a deload: reduce running volume 40% next week, add 2 mobility sessions.",
-    confidence: 79, status: "pending",
-  },
-];
+// AI Co-Pilot suggestions populate as the coach generates them per client.
+export const aiSuggestions: AISuggestion[] = [];
 
 /* ------------------------- Biometrics & Labs -------------------------- */
 
@@ -242,14 +206,8 @@ export interface LeaderRow {
   points: number;
   you?: boolean;
 }
-export const leaderboard: LeaderRow[] = [
-  { rank: 1, name: "Emma Wilson", avatar: "EW", points: 2840 },
-  { rank: 2, name: "Maya Chen", avatar: "MC", points: 2710, you: true },
-  { rank: 3, name: "Ava Thompson", avatar: "AT", points: 2655 },
-  { rank: 4, name: "Sofia Reyes", avatar: "SR", points: 2480 },
-  { rank: 5, name: "James Okafor", avatar: "JO", points: 2390 },
-  { rank: 6, name: "Daniel Garcia", avatar: "DG", points: 2105 },
-];
+// Leaderboard fills in as members earn points across challenges.
+export const leaderboard: LeaderRow[] = [];
 
 /* --------------------------- Check-in form ---------------------------- */
 
@@ -326,14 +284,7 @@ export interface TrainerRow {
   mrr: number;
   rating: number;
 }
-export const trainers: TrainerRow[] = [
-  { id: "t1", name: "Alex Coach", avatar: "AC", clients: 42, status: "active", tier: "Pro", mrr: 8450, rating: 4.9 },
-  { id: "t2", name: "Jordan Blake", avatar: "JB", clients: 88, status: "active", tier: "Elite", mrr: 14200, rating: 4.8 },
-  { id: "t3", name: "Priya Nair", avatar: "PN", clients: 31, status: "active", tier: "Pro", mrr: 6100, rating: 5.0 },
-  { id: "t4", name: "Marcus Lee", avatar: "ML", clients: 12, status: "trial", tier: "Basic", mrr: 0, rating: 4.6 },
-  { id: "t5", name: "Sara Demir", avatar: "SD", clients: 64, status: "active", tier: "Elite", mrr: 11800, rating: 4.9 },
-  { id: "t6", name: "Tom Fisher", avatar: "TF", clients: 5, status: "suspended", tier: "Basic", mrr: 0, rating: 3.9 },
-];
+export const trainers: TrainerRow[] = [];
 
 export interface PlatformUser {
   id: string;
@@ -344,16 +295,7 @@ export interface PlatformUser {
   status: "active" | "suspended" | "invited";
   mfa: boolean;
 }
-export const platformUsers: PlatformUser[] = [
-  { id: "u1", name: "Alex Coach", avatar: "AC", role: "Coach", email: "alex@ffkc.app", status: "active", mfa: true },
-  { id: "u2", name: "Jordan Blake", avatar: "JB", role: "Coach", email: "jordan@ffkc.app", status: "active", mfa: true },
-  { id: "u3", name: "Maya Chen", avatar: "MC", role: "Client", email: "maya@email.com", status: "active", mfa: false },
-  { id: "u4", name: "Riley Ops", avatar: "RO", role: "Staff", email: "riley@ffkc.app", status: "active", mfa: true },
-  { id: "u5", name: "James Okafor", avatar: "JO", role: "Client", email: "james@email.com", status: "active", mfa: false },
-  { id: "u6", name: "Tom Fisher", avatar: "TF", role: "Coach", email: "tom@ffkc.app", status: "suspended", mfa: false },
-  { id: "u7", name: "Dana Root", avatar: "DR", role: "Admin", email: "dana@ffkc.app", status: "active", mfa: true },
-  { id: "u8", name: "New Invitee", avatar: "NI", role: "Staff", email: "pending@ffkc.app", status: "invited", mfa: false },
-];
+export const platformUsers: PlatformUser[] = [];
 
 export const rolePermissions = [
   { role: "Client", perms: ["View own plan", "Log workouts & meals", "Message coach", "Book sessions"] },

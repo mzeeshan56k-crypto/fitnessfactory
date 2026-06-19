@@ -240,7 +240,7 @@ export default function ClientProgressPage() {
             <EmptyState
               icon={LineChart}
               title="No trend data yet"
-              description="Keep logging your weight and check-ins. Load example data in the Trainer portal to preview charts."
+              description="Keep logging your weight and check-ins — your trend charts will appear here."
             />
           </div>
         </section>

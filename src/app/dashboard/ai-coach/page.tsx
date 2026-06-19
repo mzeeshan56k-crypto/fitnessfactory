@@ -162,7 +162,7 @@ export default function AiCoachPage() {
             <Sparkles className="h-6 w-6" />
           </span>
           <p className="mt-4 max-w-sm text-sm text-ink-500">
-            No AI suggestions yet — load example data to see this in action.
+            No AI suggestions yet — generate one for a client and it&apos;ll appear here.
           </p>
         </div>
       ) : (

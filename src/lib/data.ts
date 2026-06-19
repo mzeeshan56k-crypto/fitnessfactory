@@ -1,5 +1,7 @@
-// Centralized mock data for the FitForge platform demo.
-// In a production build this would be backed by a database + API.
+// Centralized data types and illustrative content for the Fitness Factory KC
+// platform. Client rosters, conversations and appointments start empty — they
+// fill in as the coach adds real clients. In production this is backed by a
+// database + API.
 
 export type ClientStatus = "active" | "pending" | "inactive";
 
@@ -109,72 +111,8 @@ export interface Habit {
   weekly: boolean[];
 }
 
-export const clients: Client[] = [
-  {
-    id: "c1", name: "Maya Chen", email: "maya.chen@email.com",
-    avatar: "MC", status: "active", program: "12-Week Hypertrophy",
-    goal: "Build muscle", progress: 68, lastActive: "2h ago",
-    startWeight: 132, currentWeight: 138, goalWeight: 145, adherence: 94,
-    joinedAt: "2025-09-12", phone: "+1 415 555 0142",
-    tags: ["Strength", "Premium"],
-  },
-  {
-    id: "c2", name: "James Okafor", email: "james.o@email.com",
-    avatar: "JO", status: "active", program: "Fat Loss Accelerator",
-    goal: "Lose fat", progress: 81, lastActive: "30m ago",
-    startWeight: 214, currentWeight: 193, goalWeight: 185, adherence: 88,
-    joinedAt: "2025-08-01", phone: "+1 212 555 0199",
-    tags: ["Weight loss"],
-  },
-  {
-    id: "c3", name: "Sofia Reyes", email: "sofia.reyes@email.com",
-    avatar: "SR", status: "active", program: "Marathon Prep",
-    goal: "Run a marathon", progress: 55, lastActive: "1d ago",
-    startWeight: 145, currentWeight: 142, goalWeight: 140, adherence: 91,
-    joinedAt: "2025-10-05", phone: "+1 305 555 0177",
-    tags: ["Endurance", "Premium"],
-  },
-  {
-    id: "c4", name: "Liam Patel", email: "liam.patel@email.com",
-    avatar: "LP", status: "pending", program: "Onboarding",
-    goal: "General fitness", progress: 12, lastActive: "Never",
-    startWeight: 178, currentWeight: 178, goalWeight: 170, adherence: 0,
-    joinedAt: "2026-06-14", phone: "+1 646 555 0123",
-    tags: ["New"],
-  },
-  {
-    id: "c5", name: "Emma Wilson", email: "emma.w@email.com",
-    avatar: "EW", status: "active", program: "Postnatal Strength",
-    goal: "Rebuild strength", progress: 73, lastActive: "5h ago",
-    startWeight: 156, currentWeight: 149, goalWeight: 145, adherence: 96,
-    joinedAt: "2025-07-20", phone: "+1 718 555 0188",
-    tags: ["Strength", "Premium"],
-  },
-  {
-    id: "c6", name: "Noah Kim", email: "noah.kim@email.com",
-    avatar: "NK", status: "inactive", program: "Beginner Foundations",
-    goal: "Build habit", progress: 24, lastActive: "3w ago",
-    startWeight: 165, currentWeight: 163, goalWeight: 160, adherence: 41,
-    joinedAt: "2025-06-02", phone: "+1 503 555 0111",
-    tags: ["At risk"],
-  },
-  {
-    id: "c7", name: "Ava Thompson", email: "ava.t@email.com",
-    avatar: "AT", status: "active", program: "Powerlifting Block",
-    goal: "Increase 1RM", progress: 62, lastActive: "8h ago",
-    startWeight: 148, currentWeight: 152, goalWeight: 155, adherence: 90,
-    joinedAt: "2025-09-28", phone: "+1 408 555 0166",
-    tags: ["Strength"],
-  },
-  {
-    id: "c8", name: "Daniel Garcia", email: "daniel.g@email.com",
-    avatar: "DG", status: "active", program: "Lean & Strong",
-    goal: "Recomposition", progress: 47, lastActive: "1h ago",
-    startWeight: 188, currentWeight: 182, goalWeight: 180, adherence: 79,
-    joinedAt: "2025-11-11", phone: "+1 312 555 0144",
-    tags: ["Premium"],
-  },
-];
+// Client roster starts empty — coaches add their own real clients.
+export const clients: Client[] = [];
 
 export const exercises: Exercise[] = [
   { id: "e1", name: "Barbell Back Squat", muscle: "Quads", equipment: "Barbell", level: "Intermediate", type: "Strength", videoThumb: "squat" },
@@ -259,52 +197,11 @@ export const mealPlans: MealPlan[] = [
   },
 ];
 
-export const conversations: Conversation[] = [
-  {
-    clientId: "c1", unread: 2,
-    messages: [
-      { id: "1", fromClient: true, text: "Hey! Just finished today's push session 💪", time: "9:02 AM" },
-      { id: "2", fromClient: false, text: "Amazing work Maya! How did the bench feel at 155?", time: "9:05 AM" },
-      { id: "3", fromClient: true, text: "Tough but I got all reps. Felt strong!", time: "9:06 AM" },
-      { id: "4", fromClient: true, text: "Should I bump it up next week?", time: "9:06 AM" },
-    ],
-  },
-  {
-    clientId: "c2", unread: 0,
-    messages: [
-      { id: "1", fromClient: false, text: "Down another 1.5 lb this week — great consistency 🔥", time: "Yesterday" },
-      { id: "2", fromClient: true, text: "Feeling so much better. Thank you coach!", time: "Yesterday" },
-    ],
-  },
-  {
-    clientId: "c3", unread: 1,
-    messages: [
-      { id: "1", fromClient: true, text: "Long run done — 18 miles!", time: "2d ago" },
-      { id: "2", fromClient: false, text: "Incredible. How were the legs at the end?", time: "2d ago" },
-      { id: "3", fromClient: true, text: "Surprisingly good. Fueling plan worked well.", time: "1d ago" },
-    ],
-  },
-  {
-    clientId: "c5", unread: 0,
-    messages: [
-      { id: "1", fromClient: false, text: "Your progress photos look fantastic this month!", time: "3d ago" },
-      { id: "2", fromClient: true, text: "I can really see the difference 😊", time: "3d ago" },
-    ],
-  },
-];
+// Conversations and the calendar start empty — they populate as the coach
+// messages real clients and books sessions.
+export const conversations: Conversation[] = [];
 
-export const appointments: Appointment[] = [
-  { id: "a1", title: "1:1 with Maya", clientId: "c1", day: 0, start: "08:00", end: "09:00", type: "session" },
-  { id: "a2", title: "Check-in: James", clientId: "c2", day: 0, start: "10:30", end: "11:00", type: "check-in" },
-  { id: "a3", title: "Consult: Liam", clientId: "c4", day: 1, start: "12:00", end: "12:45", type: "consult" },
-  { id: "a4", title: "1:1 with Ava", clientId: "c7", day: 1, start: "17:00", end: "18:00", type: "session" },
-  { id: "a5", title: "Group HIIT", clientId: "", day: 2, start: "07:00", end: "08:00", type: "class" },
-  { id: "a6", title: "1:1 with Sofia", clientId: "c3", day: 2, start: "16:00", end: "17:00", type: "session" },
-  { id: "a7", title: "Check-in: Emma", clientId: "c5", day: 3, start: "09:00", end: "09:30", type: "check-in" },
-  { id: "a8", title: "1:1 with Daniel", clientId: "c8", day: 3, start: "18:00", end: "19:00", type: "session" },
-  { id: "a9", title: "Group Mobility", clientId: "", day: 4, start: "07:30", end: "08:15", type: "class" },
-  { id: "a10", title: "1:1 with Maya", clientId: "c1", day: 4, start: "08:30", end: "09:30", type: "session" },
-];
+export const appointments: Appointment[] = [];
 
 export const habits: Habit[] = [
   { id: "h1", name: "10k steps", icon: "footprints", streak: 23, weekly: [true, true, true, false, true, true, true] },

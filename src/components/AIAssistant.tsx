@@ -20,7 +20,7 @@ export function AIAssistant({ open, onClose }: { open: boolean; onClose: () => v
     {
       role: "assistant",
       content:
-        "Hi! I'm your FitForge AI Copilot. Ask me to build programs, write check-ins, plan nutrition or analyze a client. " +
+        "Hi! I'm your Fitness Factory KC AI Copilot. Ask me to build programs, write check-ins, plan nutrition or analyze a client. " +
         "Connect your own OpenAI, Claude or Gemini key in Settings for live answers.",
     },
   ]);

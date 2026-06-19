@@ -168,6 +168,11 @@ export default function ClientAchievementsPage() {
           <span className="badge bg-brand-500/15 text-brand-400">This month</span>
         </div>
         <div className="space-y-2">
+          {leaderboard.length === 0 && (
+            <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-4 text-center text-sm text-ink-400">
+              No rankings yet — the leaderboard fills in as members earn points across challenges.
+            </p>
+          )}
           {leaderboard.map((row) => (
             <div
               key={row.rank}

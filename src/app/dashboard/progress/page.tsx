@@ -86,7 +86,7 @@ export default function ProgressPage() {
           <EmptyState
             icon={LineChart}
             title="No progress data yet"
-            description="Charts populate as clients log workouts. Load example data to preview."
+            description="Charts populate as your clients log workouts and check-ins."
           />
           <DataControls variant="card" />
         </div>

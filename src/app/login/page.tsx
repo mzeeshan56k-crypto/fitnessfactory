@@ -97,7 +97,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-ink-400">
-          © {new Date().getFullYear()} Fitness Factory KC · Powered by FitForge
+          © {new Date().getFullYear()} Fitness Factory KC
         </p>
       </div>
     </main>

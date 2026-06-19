@@ -77,7 +77,7 @@ export default function BiometricsPage() {
         <EmptyState
           icon={Activity}
           title="No biometric data yet"
-          description="Sync a device or load example data in the Trainer portal to see sleep, recovery and lab markers."
+          description="Connect a wearable or log biometrics to see sleep, recovery and lab markers here."
         />
       )}
 
