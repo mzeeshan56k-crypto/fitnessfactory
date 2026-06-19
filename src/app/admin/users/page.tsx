@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import {
-  UserPlus, Search, ShieldCheck, ShieldOff, Ban, CheckCircle2, Check, Trash2, Users as UsersIcon,
+  UserPlus, Search, ShieldCheck, ShieldOff, Ban, CheckCircle2, Check, Trash2,
+  Users as UsersIcon, Mail, Loader2,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
@@ -38,13 +39,18 @@ export default function UsersPage() {
     role: "Client",
     mfa: false,
   });
+  const [sending, setSending] = useState(false);
+  const [invite, setInvite] = useState<{ url: string; sent: boolean; email: string; error?: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   function toggleStatus(u: PlatformUser) {
     app.updateUser(u.id, { status: u.status === "suspended" ? "active" : "suspended" });
   }
 
-  function submitInvite() {
-    if (!form.name.trim() || !form.email.trim()) return;
+  async function submitInvite() {
+    if (!form.name.trim() || !form.email.trim() || sending) return;
+    setSending(true);
+    // Record the invited user locally so they show in the roster as "invited".
     app.addUser({
       name: form.name.trim(),
       email: form.email.trim(),
@@ -52,8 +58,54 @@ export default function UsersPage() {
       mfa: form.mfa,
       status: "invited",
     });
-    setForm({ name: "", email: "", role: "Client", mfa: false });
+    try {
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          role: form.role,
+          businessName: app.settings.businessName,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Could not create the invitation.");
+      setInvite({ url: data.inviteUrl, sent: !!data.sent, email: form.email.trim(), error: data.error });
+    } catch (e) {
+      setInvite({
+        url: "",
+        sent: false,
+        email: form.email.trim(),
+        error: e instanceof Error ? e.message : "Failed to create the invitation.",
+      });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function closeInvite() {
     setInviteOpen(false);
+    setInvite(null);
+    setCopied(false);
+    setForm({ name: "", email: "", role: "Client", mfa: false });
+  }
+
+  function inviteAnother() {
+    setInvite(null);
+    setCopied(false);
+    setForm({ name: "", email: "", role: "Client", mfa: false });
+  }
+
+  async function copyLink() {
+    if (!invite?.url) return;
+    try {
+      await navigator.clipboard.writeText(invite.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
   }
 
   const visible = app.users.filter((u) => {
@@ -227,64 +279,139 @@ export default function UsersPage() {
 
       <Modal
         open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        title="Invite user"
+        onClose={closeInvite}
+        title={invite ? "Invitation created" : "Invite user"}
         footer={
-          <>
-            <button className="btn-secondary" onClick={() => setInviteOpen(false)}>
-              Cancel
-            </button>
-            <button
-              className="btn-primary"
-              onClick={submitInvite}
-              disabled={!form.name.trim() || !form.email.trim()}
-            >
-              Send invite
-            </button>
-          </>
+          invite ? (
+            <>
+              <button className="btn-secondary" onClick={inviteAnother}>
+                Invite another
+              </button>
+              <button className="btn-primary" onClick={closeInvite}>
+                Done
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn-secondary" onClick={closeInvite}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={submitInvite}
+                disabled={!form.name.trim() || !form.email.trim() || sending}
+              >
+                {sending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Sending…
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4" /> Send invite
+                  </>
+                )}
+              </button>
+            </>
+          )
         }
       >
-        <div className="space-y-4">
-          <Field label="Name">
-            <input
-              className="input"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Jane Doe"
-            />
-          </Field>
-          <Field label="Email">
-            <input
-              className="input"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              placeholder="jane@email.com"
-            />
-          </Field>
-          <Field label="Role">
-            <select
-              className="input"
-              value={form.role}
-              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as PlatformUser["role"] }))}
+        {invite ? (
+          <div className="space-y-4">
+            <div
+              className={`flex items-start gap-2 rounded-xl border p-3 text-sm ${
+                invite.sent
+                  ? "border-accent-500/30 bg-accent-500/10 text-accent-400"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+              }`}
             >
-              {roleOptions.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <label className="flex items-center gap-2 text-sm text-ink-700">
-            <input
-              type="checkbox"
-              checked={form.mfa}
-              onChange={(e) => setForm((f) => ({ ...f, mfa: e.target.checked }))}
-              className="h-4 w-4 rounded border-ink-300 text-brand-400 focus:ring-brand-500"
-            />
-            Require multi-factor authentication
-          </label>
-        </div>
+              {invite.sent ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              ) : (
+                <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+              )}
+              <span>
+                {invite.sent
+                  ? `Invitation email sent to ${invite.email}.`
+                  : `Invitation created for ${invite.email}. Email delivery isn't configured yet — share the link below to invite them.`}
+              </span>
+            </div>
+
+            {invite.url && (
+              <Field label="Invitation link">
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    className="input"
+                    value={invite.url}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <button type="button" className="btn-secondary shrink-0" onClick={copyLink}>
+                    {copied ? <Check className="h-4 w-4" /> : null}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </Field>
+            )}
+
+            {!invite.sent && (
+              <p className="text-xs text-ink-400">
+                To send invitations automatically by email, add a{" "}
+                <code className="rounded bg-ink-50 px-1 text-ink-600">RESEND_API_KEY</code>{" "}
+                environment variable in Vercel (and optionally{" "}
+                <code className="rounded bg-ink-50 px-1 text-ink-600">INVITE_FROM_EMAIL</code>).
+              </p>
+            )}
+            {invite.error && (
+              <p className="text-xs text-rose-400">Provider note: {invite.error}</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Field label="Name">
+              <input
+                className="input"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Jane Doe"
+              />
+            </Field>
+            <Field label="Email">
+              <input
+                className="input"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="jane@email.com"
+              />
+            </Field>
+            <Field label="Role">
+              <select
+                className="input"
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as PlatformUser["role"] }))}
+              >
+                {roleOptions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-ink-700">
+              <input
+                type="checkbox"
+                checked={form.mfa}
+                onChange={(e) => setForm((f) => ({ ...f, mfa: e.target.checked }))}
+                className="h-4 w-4 rounded border-ink-300 text-brand-400 focus:ring-brand-500"
+              />
+              Require multi-factor authentication
+            </label>
+            <p className="text-xs text-ink-400">
+              We&apos;ll email {form.email || "the recipient"} a secure link to join{" "}
+              {app.settings.businessName || "your gym"}.
+            </p>
+          </div>
+        )}
       </Modal>
     </>
   );

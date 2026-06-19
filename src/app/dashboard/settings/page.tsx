@@ -191,7 +191,12 @@ export default function SettingsPage() {
                     className="w-24"
                   />
                 ) : (
-                  <Avatar initials="AT" size="lg" />
+                  <Avatar
+                    initials={
+                      name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "FF"
+                    }
+                    size="lg"
+                  />
                 )}
                 <div>
                   {!app.settings.profilePhoto && (
@@ -378,39 +383,39 @@ export default function SettingsPage() {
               <h2 className="font-semibold text-ink-900">Billing</h2>
               <p className="text-sm text-ink-500">Manage your plan and payment method.</p>
 
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-brand-100 bg-brand-50/50 p-5">
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ink-100 bg-ink-50/40 p-5">
                 <div>
-                  <span className="badge bg-brand-500/20 text-brand-400">Current plan</span>
-                  <div className="mt-2 text-lg font-bold text-ink-900">Pro · $49/mo</div>
-                  <p className="text-sm text-ink-500">Renews on July 17, 2026</p>
+                  <span className="badge bg-ink-100 text-ink-600">Current plan</span>
+                  <div className="mt-2 text-lg font-bold text-ink-900">No plan selected</div>
+                  <p className="text-sm text-ink-500">Choose a plan to unlock payments and scheduling.</p>
                 </div>
-                <button type="button" className="btn-primary">Upgrade plan</button>
+                <button type="button" className="btn-primary">Choose a plan</button>
               </div>
 
               <div className="mt-6">
                 <div className="mb-1.5 flex justify-between text-sm">
-                  <span className="font-medium text-ink-700">Client usage</span>
-                  <span className="text-ink-500">42 / 50 clients</span>
+                  <span className="font-medium text-ink-700">Active clients</span>
+                  <span className="text-ink-500">{app.clients.length}</span>
                 </div>
                 <div className="h-2.5 w-full rounded-full bg-ink-100">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500"
-                    style={{ width: "84%" }}
+                    style={{ width: `${Math.min(100, app.clients.length * 2)}%` }}
                   />
                 </div>
               </div>
 
               <div className="mt-6">
                 <label className="label">Payment method</label>
-                <div className="flex items-center gap-4 rounded-xl border border-ink-100 p-4">
-                  <span className="flex h-10 w-14 items-center justify-center rounded-lg bg-ink-50 text-xs font-bold text-white">
-                    VISA
+                <div className="flex items-center gap-4 rounded-xl border border-dashed border-ink-200 p-4">
+                  <span className="flex h-10 w-14 items-center justify-center rounded-lg bg-ink-50 text-xs font-bold text-ink-400">
+                    CARD
                   </span>
                   <div className="flex-1">
-                    <div className="text-sm font-semibold text-ink-900">Visa ending 4242</div>
-                    <div className="text-xs text-ink-500">Expires 08 / 2028</div>
+                    <div className="text-sm font-semibold text-ink-900">No payment method on file</div>
+                    <div className="text-xs text-ink-500">Add a card to enable client billing.</div>
                   </div>
-                  <button type="button" className="btn-secondary">Update</button>
+                  <button type="button" className="btn-secondary">Add card</button>
                 </div>
               </div>
             </div>

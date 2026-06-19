@@ -38,6 +38,7 @@ export default function ClientTodayPage() {
   const todaysWorkout = app.workouts[0];
   const lost = c.startWeight - c.currentWeight;
   const toGoal = Math.abs(c.currentWeight - c.goalWeight);
+  const streak = Math.max(0, ...habits.map((h) => h.streak));
 
   return (
     <div className="space-y-6">
@@ -121,7 +122,7 @@ export default function ClientTodayPage() {
 
       {/* Quick stats */}
       <section className="grid grid-cols-3 gap-3">
-        <StatTile icon={Flame} label="Streak" value="23 days" tint="text-orange-500 bg-orange-500/15" />
+        <StatTile icon={Flame} label="Streak" value={`${streak} days`} tint="text-orange-500 bg-orange-500/15" />
         <StatTile icon={TrendingDown} label="Weight lost" value={`${lost} lb`} tint="text-accent-400 bg-accent-500/15" />
         <StatTile icon={Target} label="To goal" value={`${toGoal} lb`} tint="text-brand-400 bg-brand-500/15" />
       </section>
@@ -191,7 +192,8 @@ export default function ClientTodayPage() {
               <div className="text-xs uppercase tracking-wide text-ink-400">Next session</div>
               <div className="font-semibold text-ink-900">{nextSession.title}</div>
               <div className="text-sm text-ink-500">
-                {nextSession.start} – {nextSession.end} with Coach Alex
+                {nextSession.start} – {nextSession.end}
+                {app.settings.trainerName ? ` with ${app.settings.trainerName}` : ""}
               </div>
             </div>
           </section>

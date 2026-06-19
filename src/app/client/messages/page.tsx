@@ -69,14 +69,20 @@ export default function ClientMessagesPage() {
       <section className="card flex items-center gap-4 p-4">
         <div className="relative">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white shadow-glow">
-            AC
+            {(app.settings.trainerName?.trim() || "Coach")
+              .split(" ")
+              .map((p) => p[0])
+              .filter(Boolean)
+              .slice(0, 2)
+              .join("")
+              .toUpperCase()}
           </span>
           <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-accent-500" />
         </div>
         <div className="flex-1">
-          <h1 className="font-semibold text-ink-900">Coach Alex</h1>
+          <h1 className="font-semibold text-ink-900">{app.settings.trainerName?.trim() || "Your Coach"}</h1>
           <p className="text-xs text-ink-500">
-            Head Trainer · Usually replies in a few hours
+            {app.settings.businessName?.trim() || "Fitness Factory KC"} · Usually replies in a few hours
           </p>
         </div>
       </section>

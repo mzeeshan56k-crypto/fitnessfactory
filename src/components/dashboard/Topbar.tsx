@@ -5,8 +5,25 @@ import { Bell, Plus, Menu } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { PortalSwitcher } from "@/components/PortalSwitcher";
 import { AskAIButton } from "@/components/AIAssistant";
+import { useApp } from "@/lib/store";
+
+function initialsOf(name: string) {
+  return (
+    name
+      .split(" ")
+      .map((p) => p[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "FF"
+  );
+}
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
+  const { settings } = useApp();
+  const name = settings.trainerName?.trim() || "Coach";
+  const business = settings.businessName?.trim() || "Fitness Factory KC";
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-ink-100 bg-ink-100/80 px-4 backdrop-blur-xl sm:px-6">
       <button className="lg:hidden" onClick={onMenu} aria-label="Open menu">
@@ -25,10 +42,15 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-ink-100" />
         </button>
         <div className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 hover:bg-ink-50">
-          <Avatar initials="AC" size="sm" />
+          {settings.profilePhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={settings.profilePhoto} alt={name} className="h-8 w-8 rounded-full object-cover" />
+          ) : (
+            <Avatar initials={initialsOf(name)} size="sm" />
+          )}
           <div className="hidden text-left sm:block">
-            <div className="text-sm font-semibold leading-tight text-ink-900">Alex Coach</div>
-            <div className="text-xs text-ink-400">Head Trainer</div>
+            <div className="text-sm font-semibold leading-tight text-ink-900">{name}</div>
+            <div className="text-xs text-ink-400">{business}</div>
           </div>
         </div>
       </div>

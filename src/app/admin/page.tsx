@@ -27,15 +27,15 @@ const statusBadge: Record<string, string> = {
 };
 
 const insights = [
-  { label: "Client retention", value: "94.2%", icon: TrendingUp, tone: "text-accent-400", bg: "bg-accent-500/15" },
-  { label: "Monthly churn", value: "2.8%", icon: TrendingDown, tone: "text-rose-400", bg: "bg-rose-500/15" },
-  { label: "Avg session rating", value: "4.8 / 5", icon: Star, tone: "text-amber-400", bg: "bg-amber-500/15" },
-  { label: "Support SLA met", value: "98.5%", icon: Gauge, tone: "text-brand-400", bg: "bg-brand-500/15" },
+  { label: "Client retention", value: "—", icon: TrendingUp, tone: "text-accent-400", bg: "bg-accent-500/15" },
+  { label: "Monthly churn", value: "—", icon: TrendingDown, tone: "text-rose-400", bg: "bg-rose-500/15" },
+  { label: "Avg session rating", value: "—", icon: Star, tone: "text-amber-400", bg: "bg-amber-500/15" },
+  { label: "Support SLA met", value: "—", icon: Gauge, tone: "text-brand-400", bg: "bg-brand-500/15" },
 ];
 
 export default function AdminOverviewPage() {
   const app = useApp();
-  const maxSubs = Math.max(...billingTiers.map((t) => t.subscribers));
+  const maxSubs = Math.max(1, ...billingTiers.map((t) => t.subscribers));
 
   const coaches = app.users.filter((u) => u.role === "Coach");
   const coachCount = coaches.length;

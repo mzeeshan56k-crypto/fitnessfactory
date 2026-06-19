@@ -102,7 +102,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <Bell className="h-5 w-5" />
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-ink-100" />
             </button>
-            <Avatar initials="DR" size="sm" />
+            <Avatar initials="FF" size="sm" />
           </div>
         </header>
         <main className="flex-1 overflow-y-auto scroll-thin">

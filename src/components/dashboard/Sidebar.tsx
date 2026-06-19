@@ -75,13 +75,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         >
           <LogOut className="h-5 w-5" /> Log out
         </Link>
-        <div className="mt-3 rounded-xl bg-gradient-to-br from-brand-600 to-accent-500 p-4 text-white">
-          <div className="text-sm font-semibold">Pro plan</div>
-          <div className="mt-1 text-xs text-brand-50">42 / 50 clients used</div>
-          <div className="mt-2 h-1.5 w-full rounded-full bg-white/25">
-            <div className="h-full w-[84%] rounded-full bg-ink-100" />
-          </div>
-        </div>
       </div>
     </aside>
   );

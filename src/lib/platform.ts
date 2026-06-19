@@ -311,27 +311,22 @@ export interface BillingTier {
   features: string[];
   color: string;
 }
+// Membership tier templates the gym can offer. Subscriber counts start at 0.
 export const billingTiers: BillingTier[] = [
-  { name: "Basic", price: 19, subscribers: 1240, color: "from-ink-500 to-ink-700", features: ["Up to 5 clients", "Core builder", "Messaging"] },
-  { name: "Pro", price: 49, subscribers: 3110, color: "from-brand-500 to-brand-700", features: ["Up to 50 clients", "AI Co-Pilot", "Payments", "Scheduling"] },
-  { name: "Elite", price: 129, subscribers: 720, color: "from-accent-500 to-accent-700", features: ["Unlimited", "Branded app", "Team seats", "Priority support"] },
+  { name: "Basic", price: 19, subscribers: 0, color: "from-ink-500 to-ink-700", features: ["Up to 5 clients", "Core builder", "Messaging"] },
+  { name: "Pro", price: 49, subscribers: 0, color: "from-brand-500 to-brand-700", features: ["Up to 50 clients", "AI Co-Pilot", "Payments", "Scheduling"] },
+  { name: "Elite", price: 129, subscribers: 0, color: "from-accent-500 to-accent-700", features: ["Unlimited", "Branded app", "Team seats", "Priority support"] },
 ];
 
+// Platform KPIs start at zero and fill in from real activity.
 export const adminKpis = {
-  trainers: 5070,
-  clients: 184320,
-  mrr: 412800,
-  workoutsToday: 28940,
+  trainers: 0,
+  clients: 0,
+  mrr: 0,
+  workoutsToday: 0,
 };
 
-export const enrollmentTrend = [
-  { month: "Jan", trainers: 3800, clients: 142000 },
-  { month: "Feb", trainers: 4100, clients: 151000 },
-  { month: "Mar", trainers: 4350, clients: 160500 },
-  { month: "Apr", trainers: 4620, clients: 168900 },
-  { month: "May", trainers: 4850, clients: 177200 },
-  { month: "Jun", trainers: 5070, clients: 184320 },
-];
+export const enrollmentTrend: { month: string; trainers: number; clients: number }[] = [];
 
 /* --------------------------- Communications --------------------------- */
 
@@ -358,7 +353,7 @@ export interface DripCampaign {
 }
 export const dripCampaigns: DripCampaign[] = [
   {
-    id: "d1", name: "New client welcome", trigger: "On purchase", status: "active", enrolled: 1820,
+    id: "d1", name: "New client welcome", trigger: "On purchase", status: "draft", enrolled: 0,
     steps: [
       { day: 0, channel: "Email", title: "Welcome + app download" },
       { day: 1, channel: "Push", title: "Complete your intake form" },
@@ -367,7 +362,7 @@ export const dripCampaigns: DripCampaign[] = [
     ],
   },
   {
-    id: "d2", name: "Win-back lapsed", trigger: "14 days inactive", status: "active", enrolled: 540,
+    id: "d2", name: "Win-back lapsed", trigger: "14 days inactive", status: "draft", enrolled: 0,
     steps: [
       { day: 0, channel: "Push", title: "We miss you 👋" },
       { day: 2, channel: "Email", title: "Here's what's new" },
@@ -375,7 +370,7 @@ export const dripCampaigns: DripCampaign[] = [
     ],
   },
   {
-    id: "d3", name: "Upsell to Elite", trigger: "Pro for 90 days", status: "paused", enrolled: 210,
+    id: "d3", name: "Upsell to Elite", trigger: "Pro for 90 days", status: "draft", enrolled: 0,
     steps: [
       { day: 0, channel: "In-app", title: "Unlock the branded app" },
       { day: 3, channel: "Email", title: "Elite success stories" },

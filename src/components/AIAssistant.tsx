@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles, X, Send, Loader2, Settings, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useApp } from "@/lib/store";
@@ -29,6 +30,9 @@ export function AIAssistant({ open, onClose }: { open: boolean; onClose: () => v
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 50);
@@ -80,10 +84,10 @@ export function AIAssistant({ open, onClose }: { open: boolean; onClose: () => v
     }
   }
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-[95] flex justify-end bg-ink-50/60 backdrop-blur-sm" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex justify-end bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div
         className="flex h-full w-full max-w-md flex-col border-l border-ink-200 bg-ink-100 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -185,7 +189,8 @@ export function AIAssistant({ open, onClose }: { open: boolean; onClose: () => v
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

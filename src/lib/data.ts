@@ -203,11 +203,12 @@ export const conversations: Conversation[] = [];
 
 export const appointments: Appointment[] = [];
 
+// Habit templates a client can build streaks on — start with no logged days.
 export const habits: Habit[] = [
-  { id: "h1", name: "10k steps", icon: "footprints", streak: 23, weekly: [true, true, true, false, true, true, true] },
-  { id: "h2", name: "Drink 3L water", icon: "droplet", streak: 12, weekly: [true, true, true, true, true, false, true] },
-  { id: "h3", name: "8h sleep", icon: "moon", streak: 5, weekly: [false, true, true, true, false, true, true] },
-  { id: "h4", name: "Log meals", icon: "utensils", streak: 31, weekly: [true, true, true, true, true, true, true] },
+  { id: "h1", name: "10k steps", icon: "footprints", streak: 0, weekly: [false, false, false, false, false, false, false] },
+  { id: "h2", name: "Drink 3L water", icon: "droplet", streak: 0, weekly: [false, false, false, false, false, false, false] },
+  { id: "h3", name: "8h sleep", icon: "moon", streak: 0, weekly: [false, false, false, false, false, false, false] },
+  { id: "h4", name: "Log meals", icon: "utensils", streak: 0, weekly: [false, false, false, false, false, false, false] },
 ];
 
 // Progress chart data for a client
