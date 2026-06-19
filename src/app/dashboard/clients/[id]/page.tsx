@@ -48,7 +48,7 @@ function Loading() {
 }
 
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
-  const { clients, updateClient, removeClient, seeded, hydrated } = useApp();
+  const { clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote } = useApp();
   const router = useRouter();
   const c = clients.find((x) => x.id === params.id);
 
@@ -71,10 +71,8 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     tags: "",
   });
 
-  const [notes, setNotes, notesHydrated] = useLocalState<Note[]>(
-    `ffkc-client-notes-${params.id}`,
-    [],
-  );
+  // Coach notes persist in the shared workspace, keyed by client.
+  const notes = clientNotes[params.id] ?? [];
   const [draft, setDraft] = useState("");
 
   const [photos, , photosHydrated] = useLocalState<ProgressPhoto[]>(
@@ -162,7 +160,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       hour: "2-digit",
       minute: "2-digit",
     });
-    setNotes((prev) => [{ author: "You", time, text }, ...prev]);
+    addClientNote(params.id, { author: "You", time, text });
     setDraft("");
   }
 
@@ -401,7 +399,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               <h2 className="font-semibold text-ink-900">Coach notes</h2>
               <p className="text-sm text-ink-500">History of observations for {c.name}</p>
               <div className="mt-4 space-y-3">
-                {notesHydrated && notes.length === 0 && (
+                {notes.length === 0 && (
                   <p className="py-8 text-center text-sm text-ink-400">
                     No notes yet. Add your first observation.
                   </p>

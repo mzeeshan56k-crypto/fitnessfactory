@@ -37,6 +37,10 @@ function scopeForMember(ws: Workspace, email: string): Workspace {
     broadcasts: [],
     aiSuggestions: [],
     kanban: [],
+    // Coach-private documentation is never sent to members.
+    formReviews: {},
+    clientNotes: {},
+    recoveryNotes: {},
     settings,
     currentClientId: myId,
   };

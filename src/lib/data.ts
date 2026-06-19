@@ -111,6 +111,23 @@ export interface Habit {
   weekly: boolean[];
 }
 
+// Coach documentation, persisted in the shared workspace (keyed by client id).
+export interface ClientNote {
+  author: string;
+  time: string;
+  text: string;
+}
+
+export interface FormReview {
+  id: string;
+  date: string;
+  exercise: string;
+  faults: string[];
+  notes: string;
+  weaknessSummary: string[];
+  videoName?: string;
+}
+
 // Client roster starts empty — coaches add their own real clients.
 export const clients: Client[] = [];
 

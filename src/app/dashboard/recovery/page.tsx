@@ -10,7 +10,6 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
 import { FatigueHeatMap } from "@/components/FatigueHeatMap";
 import { useApp } from "@/lib/store";
-import { useLocalState } from "@/lib/useLocalState";
 import { askAI, aiConfigured } from "@/lib/ai";
 import { recoveryMuscles, recoveryHeatmap, sleepData } from "@/lib/platform";
 import type { Client } from "@/lib/data";
@@ -52,10 +51,11 @@ export default function CoachRecoveryPage() {
   const client =
     app.clients.find((c) => c.id === clientId) ?? app.clients[0] ?? null;
 
-  const [note, setNote] = useLocalState<string>(
-    `ffkc-recovery-${client?.id ?? "none"}`,
-    "",
-  );
+  // Recovery note persists in the shared workspace, keyed by client.
+  const note = client ? app.recoveryNotes[client.id] ?? "" : "";
+  const setNote = (text: string) => {
+    if (client) app.setRecoveryNote(client.id, text);
+  };
 
   // Days (Mon–Sun) with NO appointment for this client.
   const freeDays = useMemo(() => {

@@ -5,7 +5,7 @@ import {
 } from "react";
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
-  Appointment,
+  Appointment, ClientNote, FormReview,
 } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
@@ -75,6 +75,10 @@ export interface DB {
   broadcasts: Broadcast[];
   checkins: CheckIn[];
   forms: CoachForm[];
+  // Coach documentation, keyed by client id.
+  formReviews: Record<string, FormReview[]>;
+  clientNotes: Record<string, ClientNote[]>;
+  recoveryNotes: Record<string, string>;
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -91,6 +95,7 @@ const emptyDB: DB = {
   clients: [], exercises: [], workouts: [], programs: [], mealPlans: [],
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
+  formReviews: {}, clientNotes: {}, recoveryNotes: {},
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -148,6 +153,11 @@ interface AppContextValue extends DB {
   resolveSuggestion: (id: string, status: "approved" | "dismissed" | "pending") => void;
   // checkins
   addCheckin: (clientId: string, answers: Record<string, string | number>) => void;
+  // coach documentation
+  addFormReview: (clientId: string, review: FormReview) => void;
+  deleteFormReview: (clientId: string, id: string) => void;
+  addClientNote: (clientId: string, note: ClientNote) => void;
+  setRecoveryNote: (clientId: string, text: string) => void;
   // users (admin)
   addUser: (u: Partial<PlatformUser>) => void;
   updateUser: (id: string, patch: Partial<PlatformUser>) => void;
@@ -457,6 +467,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /* ----- coach documentation ----- */
+  const addFormReview = useCallback((clientId: string, review: FormReview) =>
+    setDb((d) => ({
+      ...d,
+      formReviews: { ...d.formReviews, [clientId]: [review, ...(d.formReviews[clientId] ?? [])] },
+    })), []);
+  const deleteFormReview = useCallback((clientId: string, id: string) =>
+    setDb((d) => ({
+      ...d,
+      formReviews: { ...d.formReviews, [clientId]: (d.formReviews[clientId] ?? []).filter((r) => r.id !== id) },
+    })), []);
+  const addClientNote = useCallback((clientId: string, note: ClientNote) =>
+    setDb((d) => ({
+      ...d,
+      clientNotes: { ...d.clientNotes, [clientId]: [note, ...(d.clientNotes[clientId] ?? [])] },
+    })), []);
+  const setRecoveryNote = useCallback((clientId: string, text: string) =>
+    setDb((d) => ({ ...d, recoveryNotes: { ...d.recoveryNotes, [clientId]: text } })), []);
+
   /* ----- users ----- */
   const addUser = useCallback((u: Partial<PlatformUser>) => {
     const initials = (u.name ?? "New User").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -497,6 +526,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addChallenge, toggleJoinChallenge,
     resolveSuggestion,
     addCheckin,
+    addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     addUser, updateUser, removeUser,
     addBroadcast,
     updateSettings,
@@ -506,7 +536,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
-    resolveSuggestion, addCheckin, addUser, updateUser, removeUser, addBroadcast, updateSettings,
+    resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
+    addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

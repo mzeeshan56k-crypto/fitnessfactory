@@ -8,7 +8,6 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { EmptyState, Field } from "@/components/ui/Modal";
 import { useApp } from "@/lib/store";
 import { askAI, aiConfigured } from "@/lib/ai";
-import { useLocalState } from "@/lib/useLocalState";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_LIFTS = ["Squat", "Bench Press", "Deadlift", "Overhead Press"];
@@ -108,8 +107,8 @@ export default function FormCheckPage() {
   const [error, setError] = useState<string>("");
 
   const activeClientId = clientId || app.clients[0]?.id || "";
-  const storageKey = `ffkc-formcheck-${activeClientId || "none"}`;
-  const [reviews, setReviews] = useLocalState<SavedReview[]>(storageKey, []);
+  // Form-check reviews persist in the shared workspace, keyed by client.
+  const reviews = app.formReviews[activeClientId] ?? [];
 
   const exerciseOptions = useMemo(() => {
     const fromStore = app.exercises.map((e) => e.name);
@@ -217,7 +216,7 @@ export default function FormCheckPage() {
       weaknessSummary: summary,
       videoName: videoName || undefined,
     };
-    setReviews((prev) => [review, ...prev]);
+    app.addFormReview(activeClientId, review);
     // reset the working session
     setFaults([]);
     setNotes("");
@@ -227,7 +226,7 @@ export default function FormCheckPage() {
   }
 
   function deleteReview(id: string) {
-    setReviews((prev) => prev.filter((r) => r.id !== id));
+    app.deleteFormReview(activeClientId, id);
   }
 
   const clientName = app.clients.find((c) => c.id === activeClientId)?.name ?? "Client";
