@@ -371,7 +371,7 @@ export default function SettingsPage() {
                       <Check className="h-3 w-3" /> Connected
                     </span>
                   ) : (
-                    <span className="text-sm text-ink-400">Not connected — running in demo mode</span>
+                    <span className="text-sm text-ink-400">Not connected — add a key to enable AI</span>
                   )}
                 </div>
               </div>

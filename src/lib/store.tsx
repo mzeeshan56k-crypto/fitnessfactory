@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from "react";
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
@@ -10,6 +10,7 @@ import type {
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
 } from "@/lib/platform";
+import type { SessionUser } from "@/lib/auth/session";
 import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms } from "@/lib/seed-content";
 
 export function uid(prefix = "id") {
@@ -101,10 +102,10 @@ const emptyDB: DB = {
   seeded: false,
 };
 
-const STORAGE_KEY = "ffkc-db-v2";
-
 interface AppContextValue extends DB {
   hydrated: boolean;
+  session: SessionUser | null;
+  signOut: () => Promise<void>;
   // generic
   set: (patch: Partial<DB>) => void;
   loadStarterContent: () => void;
@@ -162,25 +163,70 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [db, setDb] = useState<DB>(emptyDB);
   const [hydrated, setHydrated] = useState(false);
-
+  const [session, setSession] = useState<SessionUser | null>(null);
+  const lastSaved = useRef<string | null>(null);
+  const loaded = useRef(false);
+  const sessionRef = useRef<SessionUser | null>(null);
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setDb({ ...emptyDB, ...JSON.parse(raw) });
-    } catch {
-      /* ignore */
-    }
-    setHydrated(true);
+    sessionRef.current = session;
+  }, [session]);
+
+  // Load the workspace + session from the server on boot.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/workspace");
+        if (res.ok) {
+          const data = await res.json();
+          if (!active) return;
+          setSession(data.session ?? null);
+          const merged: DB = data.workspace ? { ...emptyDB, ...data.workspace } : emptyDB;
+          setDb(merged);
+          lastSaved.current = JSON.stringify(merged);
+        }
+      } catch {
+        /* offline / unauthenticated */
+      } finally {
+        if (active) {
+          loaded.current = true;
+          setHydrated(true);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
+  // Persist the workspace to the server when it changes (debounced).
+  // Members never overwrite the shared workspace — their writes go through
+  // dedicated endpoints — so only staff roles bulk-save.
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !loaded.current || !session || session.role === "member") return;
+    const snapshot = JSON.stringify(db);
+    if (snapshot === lastSaved.current) return;
+    const t = setTimeout(() => {
+      lastSaved.current = snapshot;
+      fetch("/api/workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: snapshot,
+      }).catch(() => {
+        /* will retry on next change */
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [db, hydrated, session]);
+
+  const signOut = useCallback(async () => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      await fetch("/api/auth/logout", { method: "POST" });
     } catch {
       /* ignore */
     }
-  }, [db, hydrated]);
+    window.location.href = "/login";
+  }, []);
 
   const set = useCallback((patch: Partial<DB>) => setDb((d) => ({ ...d, ...patch })), []);
 
@@ -318,6 +364,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         : [...d.conversations, { clientId, unread: fromClient ? 1 : 0, messages: [msg] }];
       return { ...d, conversations };
     });
+    // A member's outgoing message is persisted server-side safely.
+    if (fromClient && sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "message", text }),
+      }).catch(() => {});
+    }
   }, []);
 
   /* ----- appointments ----- */
@@ -394,6 +448,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addCheckin = useCallback((clientId: string, answers: Record<string, string | number>) => {
     const ci: CheckIn = { id: uid("ci"), clientId, date: new Date().toISOString(), answers };
     setDb((d) => ({ ...d, checkins: [ci, ...d.checkins] }));
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "checkin", answers }),
+      }).catch(() => {});
+    }
   }, []);
 
   /* ----- users ----- */
@@ -422,7 +483,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDb((d) => ({ ...d, settings: { ...d.settings, ...patch } })), []);
 
   const value = useMemo<AppContextValue>(() => ({
-    ...db, hydrated,
+    ...db, hydrated, session, signOut,
     set, loadStarterContent, resetAll,
     addForm, updateForm, removeForm,
     addClient, updateClient, removeClient, setCurrentClient,
@@ -440,7 +501,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addBroadcast,
     updateSettings,
   }), [
-    db, hydrated, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
+    db, hydrated, session, signOut, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
     setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
@@ -459,6 +520,12 @@ export function useApp() {
 
 /** Convenience: the client currently being viewed in the client portal. */
 export function useCurrentClient() {
-  const { clients, currentClientId } = useApp();
+  const { clients, currentClientId, session } = useApp();
+  // A signed-in member is matched to their own client record by email.
+  if (session?.role === "member") {
+    return (
+      clients.find((c) => c.email.toLowerCase() === session.email.toLowerCase()) ?? null
+    );
+  }
   return clients.find((c) => c.id === currentClientId) ?? clients[0] ?? null;
 }

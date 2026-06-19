@@ -32,9 +32,14 @@ Requires Node 18.18+ (Node 20+ recommended). No env vars needed to run the demo.
 
 ## 2. Sign in
 
-The demo has no backend auth yet, so **any email/password works** — pick a role
-(Coach / Member / Admin) on the login screen and you're in. Wiring real
-authentication is the first production step (see §5).
+Authentication is real. The **first account created becomes the gym owner**
+(the login screen shows a one-time setup form). Everyone else joins by
+invitation — Admin → Identity & Access → **Invite user**, which emails a join
+link (or gives you a shareable link to send). Roles: **Owner / Admin / Coach /
+Member**, each scoped to the portals they're allowed to use.
+
+Passwords are hashed (bcrypt) and sessions are signed JWT cookies. Set
+`AUTH_SECRET` and a KV store before going live (see §4).
 
 ---
 
@@ -58,27 +63,45 @@ authentication is the first production step (see §5).
   exercise library, 20 workouts, 5 programs and 5 forms. **Load example data**
   fills everything with demo clients.
 
-Data persists per browser via `localStorage` (no database yet).
+All data is stored server-side in KV (Upstash Redis), shared across devices and
+scoped by role — members only ever receive their own data.
 
 ---
 
 ## 4. Deploy to Vercel
 
 1. Push this repo to GitHub (see §6 to publish as a fresh standalone repo).
-2. [vercel.com/new](https://vercel.com/new) → import the repo → **Deploy**
-   (Next.js auto-detected, zero config). No env vars required.
+2. [vercel.com/new](https://vercel.com/new) → import the repo.
+3. In the project **Storage** tab, create a **KV (Upstash Redis)** database —
+   `KV_REST_API_URL` and `KV_REST_API_TOKEN` are injected automatically.
+4. Add environment variables, then **Deploy**:
+
+   | Variable | Required | Purpose |
+   |---|---|---|
+   | `AUTH_SECRET` | ✅ | Signs sessions — `openssl rand -base64 32` |
+   | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | ✅ | Data storage (auto-set by Vercel KV) |
+   | `RESEND_API_KEY` | optional | Sends invite emails ([resend.com](https://resend.com)) |
+   | `INVITE_FROM_EMAIL` | optional | From-address for invites |
+
+5. Open the site and create the owner account.
 
 ---
 
-## 5. Production roadmap
+## 5. What's live vs. next
 
-1. **Auth & roles** — NextAuth/Clerk/Supabase so Coach/Member/Admin are real
-   accounts; protect `/dashboard`, `/client`, `/admin`.
-2. **Database** — Postgres/Supabase; the typed shapes in `src/lib/store.tsx`
-   map directly to your schema.
-3. **File storage** — S3 / Supabase Storage for photos & form-check videos.
-4. **Payments** — Stripe for member billing.
-5. **AI** — already provider-ready; just supply keys server-side per tenant.
+**Live now:** real auth + roles (`src/lib/auth`, `src/middleware.ts`),
+server-side persistence in KV (`src/app/api/workspace`), role-scoped data for
+members, email invitations (`src/app/api/invite`, Resend), and the AI Copilot
+proxy (bring-your-own provider key).
+
+**Next steps:**
+
+1. **File storage** — S3 / Vercel Blob for progress photos & form-check videos
+   (currently stored inline).
+2. **Payments** — Stripe for member billing.
+3. **Per-feature history** — form-check reviews and photo annotations are still
+   saved per-browser; move them into the workspace for cross-device sync.
+4. **Password reset** — add an email-based reset flow.
 
 ---
 

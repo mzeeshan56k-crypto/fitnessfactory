@@ -64,7 +64,7 @@ export function AIAssistant({ open, onClose }: { open: boolean; onClose: () => v
           {
             role: "assistant",
             content:
-              "⚡ Demo mode. To get real AI answers, open **Settings → AI Copilot**, pick a provider " +
+              "AI isn't connected yet. Open **Settings → AI Copilot**, pick a provider " +
               "(OpenAI, Claude or Gemini) and paste your API key. Once connected, I'll generate programs, " +
               "meal plans and coaching replies live.",
           },
@@ -100,7 +100,7 @@ export function AIAssistant({ open, onClose }: { open: boolean; onClose: () => v
             <div>
               <div className="font-semibold text-ink-900">AI Copilot</div>
               <div className="text-xs text-ink-400">
-                {configured ? `${settings.aiProvider} · ${settings.aiModel || "default"}` : "Demo mode — not connected"}
+                {configured ? `${settings.aiProvider} · ${settings.aiModel || "default"}` : "Not connected"}
               </div>
             </div>
           </div>

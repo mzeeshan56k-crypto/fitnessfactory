@@ -9,6 +9,7 @@ import {
   ScanLine, HeartPulse,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
+import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -32,6 +33,7 @@ const nav = [
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { signOut } = useApp();
   return (
     <aside className="flex h-full w-64 flex-col border-r border-ink-100 bg-ink-100">
       <div className="flex h-16 items-center px-6">
@@ -69,12 +71,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         >
           <Settings className="h-5 w-5" /> Settings
         </Link>
-        <Link
-          href="/"
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-600 transition hover:bg-ink-50 hover:text-ink-900"
+        <button
+          onClick={() => signOut()}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-600 transition hover:bg-rose-500/15 hover:text-rose-400"
         >
           <LogOut className="h-5 w-5" /> Log out
-        </Link>
+        </button>
       </div>
     </aside>
   );

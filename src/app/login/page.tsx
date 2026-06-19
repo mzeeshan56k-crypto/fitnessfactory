@@ -1,30 +1,98 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Dumbbell, User, Shield, ArrowRight, Loader2 } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, Loader2, AlertCircle } from "lucide-react";
 
-type Role = "coach" | "member" | "admin";
+type Mode = "login" | "signup" | "accept";
 
-const ROLES: { id: Role; label: string; desc: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "coach", label: "Coach", desc: "Manage clients & programs", href: "/dashboard", icon: Dumbbell },
-  { id: "member", label: "Member", desc: "Your training & nutrition", href: "/client", icon: User },
-  { id: "admin", label: "Admin", desc: "Gym & platform settings", href: "/admin", icon: Shield },
-];
+function homeFor(role: string) {
+  if (role === "member") return "/client";
+  if (role === "admin") return "/admin";
+  return "/dashboard";
+}
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [role, setRole] = useState<Role>("coach");
-  const [email, setEmail] = useState("");
+function LoginInner() {
+  const params = useSearchParams();
+
+  const inviteToken = params.get("invite");
+  const inviteEmail = params.get("email");
+  const next = params.get("next");
+
+  const [mode, setMode] = useState<Mode>(inviteToken ? "accept" : "login");
+  const [ready, setReady] = useState(Boolean(inviteToken));
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState(inviteEmail ?? "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function login(e: React.FormEvent) {
+  // Decide between first-run owner setup and normal sign-in.
+  useEffect(() => {
+    if (inviteToken) return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/status");
+        const data = await res.json();
+        if (active && !data.hasOwner) setMode("signup");
+      } catch {
+        /* default to login */
+      } finally {
+        if (active) setReady(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [inviteToken]);
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const dest = ROLES.find((r) => r.id === role)!.href;
-    setTimeout(() => router.push(dest), 500);
+    setError(null);
+    try {
+      const endpoint =
+        mode === "signup"
+          ? "/api/auth/signup"
+          : mode === "accept"
+            ? "/api/auth/accept"
+            : "/api/auth/login";
+
+      const payload =
+        mode === "signup"
+          ? { name, email, password }
+          : mode === "accept"
+            ? { name, email: inviteEmail, token: inviteToken, password }
+            : { email, password };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Something went wrong. Please try again.");
+
+      const dest = next && next.startsWith("/") ? next : homeFor(data.user?.role ?? "coach");
+      // Full navigation so the app reloads with the new session cookie.
+      window.location.assign(dest);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setLoading(false);
+    }
   }
+
+  const heading =
+    mode === "signup" ? "Set up your gym" : mode === "accept" ? "Accept your invitation" : "Welcome back";
+  const subheading =
+    mode === "signup"
+      ? "Create the owner account for your coaching platform."
+      : mode === "accept"
+        ? "Choose a password to activate your account."
+        : "Sign in to your coaching platform";
+  const cta = mode === "signup" ? "Create account" : mode === "accept" ? "Activate account" : "Sign in";
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
@@ -33,7 +101,6 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute -right-32 bottom-0 h-80 w-80 rounded-full bg-orange-500/10 blur-3xl" />
 
       <div className="relative w-full max-w-md">
-        {/* Brand */}
         <div className="mb-8 flex flex-col items-center text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-orange-500 shadow-glow">
             <svg viewBox="0 0 24 24" className="h-8 w-8 text-white" fill="none">
@@ -43,57 +110,73 @@ export default function LoginPage() {
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-ink-900">
             Fitness Factory <span className="text-brand-500">KC</span>
           </h1>
-          <p className="mt-1 text-sm text-ink-500">Sign in to your coaching platform</p>
+          <p className="mt-1 text-sm text-ink-500">{subheading}</p>
         </div>
 
         <div className="card p-6 sm:p-7">
-          {/* Role selector */}
-          <div className="mb-5 grid grid-cols-3 gap-2">
-            {ROLES.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => setRole(r.id)}
-                className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition ${
-                  role === r.id
-                    ? "border-brand-500 bg-brand-500/10"
-                    : "border-ink-200 hover:border-ink-300"
-                }`}
-              >
-                <r.icon className={`h-5 w-5 ${role === r.id ? "text-brand-400" : "text-ink-500"}`} />
-                <span className={`text-xs font-semibold ${role === r.id ? "text-ink-900" : "text-ink-600"}`}>{r.label}</span>
-              </button>
-            ))}
-          </div>
+          <h2 className="mb-5 text-lg font-semibold text-ink-900">{heading}</h2>
 
-          <form onSubmit={login} className="space-y-4">
-            <div>
-              <label className="label" htmlFor="email">Email</label>
-              <input
-                id="email" type="email" required
-                value={email} onChange={(e) => setEmail(e.target.value)}
-                className="input" placeholder="you@fitnessfactorykc.com"
-              />
+          {!ready ? (
+            <div className="flex h-40 items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-ink-400" />
             </div>
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="label" htmlFor="password">Password</label>
-                <button type="button" className="text-sm text-brand-400 hover:text-brand-500">Forgot?</button>
+          ) : (
+            <form onSubmit={submit} className="space-y-4">
+              {(mode === "signup" || mode === "accept") && (
+                <div>
+                  <label className="label" htmlFor="name">Full name</label>
+                  <input
+                    id="name" required
+                    value={name} onChange={(e) => setName(e.target.value)}
+                    className="input" placeholder="Your name"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="label" htmlFor="email">Email</label>
+                <input
+                  id="email" type="email" required
+                  value={mode === "accept" ? inviteEmail ?? "" : email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={mode === "accept"}
+                  className="input disabled:opacity-60"
+                  placeholder="you@fitnessfactorykc.com"
+                />
               </div>
-              <input
-                id="password" type="password" required
-                value={password} onChange={(e) => setPassword(e.target.value)}
-                className="input" placeholder="••••••••"
-              />
-            </div>
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Sign in as {ROLES.find((r) => r.id === role)!.label} <ArrowRight className="h-4 w-4" /></>}
-            </button>
-          </form>
 
-          <p className="mt-4 text-center text-xs text-ink-400">
-            Demo build — any email/password works. Pick a role above to enter.
-          </p>
+              <div>
+                <label className="label" htmlFor="password">
+                  {mode === "login" ? "Password" : "Create a password"}
+                </label>
+                <input
+                  id="password" type="password" required
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="input" placeholder="••••••••"
+                  minLength={mode === "login" ? undefined : 8}
+                />
+                {mode !== "login" && (
+                  <p className="mt-1 text-xs text-ink-400">At least 8 characters.</p>
+                )}
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-400">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+                </div>
+              )}
+
+              <button type="submit" disabled={loading} className="btn-primary w-full py-3">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{cta} <ArrowRight className="h-4 w-4" /></>}
+              </button>
+            </form>
+          )}
+
+          {ready && mode === "signup" && (
+            <p className="mt-4 text-center text-xs text-ink-400">
+              This is the first account, so it becomes the gym owner. Additional coaches and members join by invitation.
+            </p>
+          )}
         </div>
 
         <p className="mt-6 text-center text-xs text-ink-400">
@@ -101,5 +184,13 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
   );
 }

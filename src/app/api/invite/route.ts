@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAccount, getAccount, normalizeEmail, updateAccount } from "@/lib/auth/accounts";
+import { getSessionUser } from "@/lib/auth/accounts";
+import type { Role } from "@/lib/auth/session";
+
+export const runtime = "nodejs";
 
 interface InviteBody {
   name?: string;
@@ -7,8 +12,15 @@ interface InviteBody {
   businessName?: string;
 }
 
+const ROLE_MAP: Record<string, Role> = {
+  Client: "member",
+  Member: "member",
+  Coach: "coach",
+  Staff: "coach",
+  Admin: "admin",
+};
+
 function token() {
-  // URL-safe random token for the invitation link.
   return (
     Math.random().toString(36).slice(2) +
     Math.random().toString(36).slice(2)
@@ -16,12 +28,16 @@ function token() {
 }
 
 /**
- * Creates an invitation and (when an email provider is configured) emails the
- * recipient a join link. Works out of the box by always returning a shareable
- * link; set RESEND_API_KEY (and optionally INVITE_FROM_EMAIL) in the
- * environment to have invites delivered by email automatically.
+ * Creates an invitation: provisions a pending account and (when an email
+ * provider is configured) emails a join link. Always returns a shareable link.
+ * Set RESEND_API_KEY (and optionally INVITE_FROM_EMAIL) to send automatically.
  */
 export async function POST(req: NextRequest) {
+  const inviter = await getSessionUser();
+  if (!inviter || (inviter.role !== "owner" && inviter.role !== "admin")) {
+    return NextResponse.json({ error: "Only an owner or admin can invite users." }, { status: 403 });
+  }
+
   let body: InviteBody;
   try {
     body = await req.json();
@@ -29,28 +45,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const email = body.email?.trim();
+  const email = body.email ? normalizeEmail(body.email) : "";
   const name = body.name?.trim() || "there";
-  const role = body.role?.trim() || "Member";
+  const role = ROLE_MAP[body.role ?? "Member"] ?? "member";
   const business = body.businessName?.trim() || "Fitness Factory KC";
 
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ error: "A valid email address is required." }, { status: 400 });
   }
 
-  // Build an absolute join link from the request origin.
+  const existing = await getAccount(email);
+  if (existing && existing.status === "active") {
+    return NextResponse.json({ error: "That email already has an active account." }, { status: 409 });
+  }
+
+  const tkn = token();
+  if (existing) {
+    await updateAccount(email, { name, role, status: "invited", inviteToken: tkn });
+  } else {
+    await createAccount({ email, name, role, status: "invited", inviteToken: tkn });
+  }
+
   const origin =
     req.headers.get("origin") ||
     req.nextUrl.origin ||
     `https://${req.headers.get("host") ?? "localhost:3000"}`;
   const inviteUrl =
-    `${origin}/login?invite=${token()}` +
-    `&email=${encodeURIComponent(email)}&role=${encodeURIComponent(role)}`;
+    `${origin}/login?invite=${tkn}&email=${encodeURIComponent(email)}&role=${encodeURIComponent(role)}`;
 
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.INVITE_FROM_EMAIL || "onboarding@resend.dev";
 
-  // No provider configured → still succeed and return the link to share.
   if (!apiKey) {
     return NextResponse.json({ ok: true, sent: false, inviteUrl });
   }
@@ -58,10 +83,7 @@ export async function POST(req: NextRequest) {
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         from: `${business} <${from}>`,
         to: [email],
@@ -71,7 +93,7 @@ export async function POST(req: NextRequest) {
             <h2 style="margin:0 0 8px">Welcome to ${business} 👋</h2>
             <p style="margin:0 0 16px;color:#475569">
               Hi ${name}, you've been invited to join <strong>${business}</strong> as a ${role}.
-              Click below to set up your account and get started.
+              Click below to set your password and get started.
             </p>
             <a href="${inviteUrl}"
                style="display:inline-block;background:#eb1313;color:#fff;text-decoration:none;
@@ -87,12 +109,9 @@ export async function POST(req: NextRequest) {
 
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      const message =
-        (data && (data.message || data.error)) || "Email provider rejected the request.";
-      // Still return the link so the invite can be shared manually.
+      const message = (data && (data.message || data.error)) || "Email provider rejected the request.";
       return NextResponse.json({ ok: true, sent: false, inviteUrl, error: message });
     }
-
     return NextResponse.json({ ok: true, sent: true, inviteUrl });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to send invitation email.";
