@@ -5,7 +5,7 @@ import {
 } from "react";
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
-  Appointment, ClientNote, FormReview,
+  Appointment, ClientNote, FormReview, ClientPlan,
 } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
@@ -79,6 +79,8 @@ export interface DB {
   formReviews: Record<string, FormReview[]>;
   clientNotes: Record<string, ClientNote[]>;
   recoveryNotes: Record<string, string>;
+  // What the coach has assigned to each client, keyed by client id.
+  clientPlans: Record<string, ClientPlan>;
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -95,7 +97,7 @@ const emptyDB: DB = {
   clients: [], exercises: [], workouts: [], programs: [], mealPlans: [],
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
-  formReviews: {}, clientNotes: {}, recoveryNotes: {},
+  formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {},
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -158,6 +160,10 @@ interface AppContextValue extends DB {
   deleteFormReview: (clientId: string, id: string) => void;
   addClientNote: (clientId: string, note: ClientNote) => void;
   setRecoveryNote: (clientId: string, text: string) => void;
+  // assignment (coach → client)
+  toggleAssignedWorkout: (clientId: string, workoutId: string) => void;
+  setClientProgram: (clientId: string, programId: string) => void;
+  setClientMealPlan: (clientId: string, mealPlanId: string) => void;
   // users (admin)
   addUser: (u: Partial<PlatformUser>) => void;
   updateUser: (id: string, patch: Partial<PlatformUser>) => void;
@@ -486,6 +492,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setRecoveryNote = useCallback((clientId: string, text: string) =>
     setDb((d) => ({ ...d, recoveryNotes: { ...d.recoveryNotes, [clientId]: text } })), []);
 
+  /* ----- assignment (coach → client) ----- */
+  const toggleAssignedWorkout = useCallback((clientId: string, workoutId: string) =>
+    setDb((d) => {
+      const plan = d.clientPlans[clientId] ?? { workoutIds: [] };
+      const has = plan.workoutIds.includes(workoutId);
+      const workoutIds = has
+        ? plan.workoutIds.filter((id) => id !== workoutId)
+        : [...plan.workoutIds, workoutId];
+      return { ...d, clientPlans: { ...d.clientPlans, [clientId]: { ...plan, workoutIds } } };
+    }), []);
+  const setClientProgram = useCallback((clientId: string, programId: string) =>
+    setDb((d) => {
+      const program = d.programs.find((p) => p.id === programId);
+      return {
+        ...d,
+        clientPlans: { ...d.clientPlans, [clientId]: { ...(d.clientPlans[clientId] ?? { workoutIds: [] }), programId } },
+        // Keep the client's display program name in sync.
+        clients: program ? d.clients.map((c) => (c.id === clientId ? { ...c, program: program.name } : c)) : d.clients,
+      };
+    }), []);
+  const setClientMealPlan = useCallback((clientId: string, mealPlanId: string) =>
+    setDb((d) => ({
+      ...d,
+      clientPlans: { ...d.clientPlans, [clientId]: { ...(d.clientPlans[clientId] ?? { workoutIds: [] }), mealPlanId } },
+    })), []);
+
   /* ----- users ----- */
   const addUser = useCallback((u: Partial<PlatformUser>) => {
     const initials = (u.name ?? "New User").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -527,6 +559,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
+    toggleAssignedWorkout, setClientProgram, setClientMealPlan,
     addUser, updateUser, removeUser,
     addBroadcast,
     updateSettings,
@@ -537,6 +570,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
+    toggleAssignedWorkout, setClientProgram, setClientMealPlan,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);
 

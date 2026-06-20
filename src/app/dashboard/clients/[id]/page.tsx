@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, MessageSquare, Pencil, Trash2, Scale, Target, Flag, Activity,
   Dumbbell, Calendar, Sparkles, Clock, Layers, LineChart, Loader2, Images,
-  Mail, Check, KeyRound,
+  Mail, Check, KeyRound, X, Apple,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
@@ -15,7 +15,7 @@ import { WeightChart, StrengthChart, AdherenceRing } from "@/components/dashboar
 import { useApp } from "@/lib/store";
 import { useLocalState } from "@/lib/useLocalState";
 import {
-  workouts, weightTrend, strengthTrend, type ClientStatus,
+  weightTrend, strengthTrend, type ClientStatus,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +49,11 @@ function Loading() {
 }
 
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
-  const { clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings } = useApp();
+  const {
+    clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings,
+    workouts: libWorkouts, programs, mealPlans, clientPlans,
+    toggleAssignedWorkout, setClientProgram, setClientMealPlan,
+  } = useApp();
   const router = useRouter();
   const c = clients.find((x) => x.id === params.id);
 
@@ -144,7 +148,13 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     );
   }
 
-  const sampleWorkouts = workouts.slice(0, 3);
+  // Assignment plan for this client.
+  const plan = clientPlans[c.id] ?? { workoutIds: [] };
+  const assignedWorkouts = plan.workoutIds
+    .map((id) => libWorkouts.find((w) => w.id === id))
+    .filter((w): w is NonNullable<typeof w> => Boolean(w));
+  const unassignedWorkouts = libWorkouts.filter((w) => !plan.workoutIds.includes(w.id));
+
   const joined = new Date(c.joinedAt).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -355,37 +365,114 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
         {tab === "Training" && (
           <div className="space-y-6">
-            <div className="card p-6">
-              <div className="flex items-center gap-2">
-                <Dumbbell className="h-5 w-5 text-brand-400" />
-                <h2 className="font-semibold text-ink-900">Assigned program</h2>
+            {/* Program + nutrition assignment */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="card p-6">
+                <div className="flex items-center gap-2">
+                  <Dumbbell className="h-5 w-5 text-brand-400" />
+                  <h2 className="font-semibold text-ink-900">Program</h2>
+                </div>
+                <p className="mt-1 text-sm text-ink-500">Assign a program template to {c.name.split(" ")[0]}.</p>
+                <select
+                  className="input mt-4"
+                  value={plan.programId ?? ""}
+                  onChange={(e) => setClientProgram(c.id, e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {programs.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {programs.length === 0 && (
+                  <p className="mt-2 text-xs text-ink-400">
+                    No programs yet — create them in <Link href="/dashboard/program-builder" className="text-brand-400">Program Builder</Link> or load starter content.
+                  </p>
+                )}
               </div>
-              <p className="mt-1 text-sm text-ink-500">{c.program}</p>
+
+              <div className="card p-6">
+                <div className="flex items-center gap-2">
+                  <Apple className="h-5 w-5 text-accent-400" />
+                  <h2 className="font-semibold text-ink-900">Nutrition plan</h2>
+                </div>
+                <p className="mt-1 text-sm text-ink-500">Assign a meal plan this client will see.</p>
+                <select
+                  className="input mt-4"
+                  value={plan.mealPlanId ?? ""}
+                  onChange={(e) => setClientMealPlan(c.id, e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {mealPlans.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              {sampleWorkouts.map((w) => (
-                <div key={w.id} className="card p-5">
-                  <div className="flex items-start justify-between">
-                    <h3 className="font-semibold text-ink-900">{w.name}</h3>
-                    <span className="badge bg-brand-500/15 text-brand-400">{w.category}</span>
-                  </div>
-                  <div className="mt-4 space-y-2 text-sm text-ink-500">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-ink-400" />
-                      {w.durationMin} min
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-ink-400" />
-                      {w.difficulty}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Layers className="h-4 w-4 text-ink-400" />
-                      {w.exercises.length} exercises
-                    </div>
-                  </div>
+            {/* Assigned workouts */}
+            <div className="card p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-brand-400" />
+                  <h2 className="font-semibold text-ink-900">Assigned workouts</h2>
+                  <span className="badge bg-ink-100 text-ink-600">{assignedWorkouts.length}</span>
                 </div>
-              ))}
+                <div className="w-full sm:w-64">
+                  <select
+                    className="input"
+                    value=""
+                    onChange={(e) => { if (e.target.value) toggleAssignedWorkout(c.id, e.target.value); }}
+                    disabled={unassignedWorkouts.length === 0}
+                  >
+                    <option value="">
+                      {unassignedWorkouts.length === 0 ? "All workouts assigned" : "+ Assign a workout…"}
+                    </option>
+                    {unassignedWorkouts.map((w) => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {assignedWorkouts.length === 0 ? (
+                <div className="mt-4">
+                  <EmptyState
+                    icon={Dumbbell}
+                    title="No workouts assigned"
+                    description={
+                      libWorkouts.length === 0
+                        ? "Add workouts in the Training section (or load starter content), then assign them here."
+                        : "Use the dropdown above to assign workouts from your library. The member sees only what's assigned."
+                    }
+                    action={
+                      libWorkouts.length === 0
+                        ? <Link href="/dashboard/workouts" className="btn-primary">Go to Workouts</Link>
+                        : undefined
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {assignedWorkouts.map((w) => (
+                    <div key={w.id} className="rounded-xl border border-ink-100 p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-ink-900">{w.name}</h3>
+                        <button
+                          onClick={() => toggleAssignedWorkout(c.id, w.id)}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-400 transition hover:bg-rose-500/15 hover:text-rose-400"
+                          aria-label={`Remove ${w.name}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="mt-3 space-y-1.5 text-sm text-ink-500">
+                        <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-ink-400" /> {w.durationMin} min</div>
+                        <div className="flex items-center gap-2"><Layers className="h-4 w-4 text-ink-400" /> {w.exercises.length} exercises</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

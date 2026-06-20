@@ -35,7 +35,11 @@ export default function ClientWorkoutsPage() {
       />
     );
 
-  const workouts = app.workouts;
+  // Members see only the workouts their coach assigned to them.
+  const plan = app.clientPlans[c.id];
+  const workouts = (plan?.workoutIds ?? [])
+    .map((id) => app.workouts.find((w) => w.id === id))
+    .filter((w): w is NonNullable<typeof w> => Boolean(w));
 
   return (
     <div className="space-y-6">

@@ -35,7 +35,11 @@ export default function ClientTodayPage() {
       />
     );
 
-  const todaysWorkout = app.workouts[0];
+  // The member's assigned workouts (today = the first one assigned by the coach).
+  const assignedWorkouts = (app.clientPlans[c.id]?.workoutIds ?? [])
+    .map((id) => app.workouts.find((w) => w.id === id))
+    .filter((w): w is NonNullable<typeof w> => Boolean(w));
+  const todaysWorkout = assignedWorkouts[0];
   const lost = c.startWeight - c.currentWeight;
   const toGoal = Math.abs(c.currentWeight - c.goalWeight);
   const streak = Math.max(0, ...habits.map((h) => h.streak));

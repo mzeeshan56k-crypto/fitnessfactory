@@ -128,6 +128,13 @@ export interface FormReview {
   videoName?: string;
 }
 
+// What a coach has assigned to a specific client.
+export interface ClientPlan {
+  workoutIds: string[];
+  programId?: string;
+  mealPlanId?: string;
+}
+
 // Client roster starts empty — coaches add their own real clients.
 export const clients: Client[] = [];
 

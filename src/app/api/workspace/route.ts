@@ -14,6 +14,7 @@ interface Workspace {
   conversations?: { clientId: string }[];
   appointments?: { clientId: string }[];
   checkins?: { clientId: string }[];
+  clientPlans?: Record<string, unknown>;
   settings?: Record<string, unknown>;
   [k: string]: unknown;
 }
@@ -44,6 +45,8 @@ function scopeForMember(ws: Workspace, user: { email: string; clientId?: string 
     formReviews: {},
     clientNotes: {},
     recoveryNotes: {},
+    // Only the member's own assignment plan.
+    clientPlans: myId && ws.clientPlans?.[myId] ? { [myId]: ws.clientPlans[myId] } : {},
     settings,
     currentClientId: myId,
   };
