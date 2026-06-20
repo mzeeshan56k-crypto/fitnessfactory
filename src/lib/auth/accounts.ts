@@ -2,14 +2,14 @@
 import "server-only";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
-import { kvGet, kvSet } from "@/lib/storage";
+import { kvGet, kvSet, kvDel } from "@/lib/storage";
 import { SESSION_COOKIE, verifySession, type Role, type SessionUser } from "@/lib/auth/session";
 
 export interface Account {
   email: string; // lowercase — the identifier
   name: string;
   role: Role;
-  status: "active" | "invited";
+  status: "active" | "invited" | "suspended";
   passwordHash?: string;
   inviteToken?: string;
   clientId?: string; // for members: the client record they own
@@ -55,7 +55,7 @@ export async function createAccount(input: {
   name: string;
   role: Role;
   password?: string;
-  status?: "active" | "invited";
+  status?: "active" | "invited" | "suspended";
   inviteToken?: string;
   clientId?: string;
 }): Promise<Account> {
@@ -84,6 +84,13 @@ export async function updateAccount(email: string, patch: Partial<Account>): Pro
   const next = { ...existing, ...patch, email: existing.email };
   await kvSet(userKey(email), next);
   return next;
+}
+
+export async function deleteAccount(email: string): Promise<void> {
+  const e = normalizeEmail(email);
+  await kvDel(userKey(e));
+  const list = (await kvGet<string[]>(INDEX_KEY)) ?? [];
+  await kvSet(INDEX_KEY, list.filter((x) => x !== e));
 }
 
 export async function verifyCredentials(email: string, password: string): Promise<Account | null> {
