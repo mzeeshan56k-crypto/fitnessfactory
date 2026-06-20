@@ -12,6 +12,7 @@ export interface Account {
   status: "active" | "invited";
   passwordHash?: string;
   inviteToken?: string;
+  clientId?: string; // for members: the client record they own
   createdAt: string;
 }
 
@@ -56,6 +57,7 @@ export async function createAccount(input: {
   password?: string;
   status?: "active" | "invited";
   inviteToken?: string;
+  clientId?: string;
 }): Promise<Account> {
   const email = normalizeEmail(input.email);
   const account: Account = {
@@ -65,6 +67,7 @@ export async function createAccount(input: {
     status: input.status ?? "active",
     passwordHash: input.password ? await hashPassword(input.password) : undefined,
     inviteToken: input.inviteToken,
+    clientId: input.clientId,
     createdAt: new Date().toISOString(),
   };
   await kvSet(userKey(email), account);
@@ -91,7 +94,7 @@ export async function verifyCredentials(email: string, password: string): Promis
 }
 
 export function toSessionUser(account: Account): SessionUser {
-  return { email: account.email, name: account.name, role: account.role };
+  return { email: account.email, name: account.name, role: account.role, clientId: account.clientId };
 }
 
 /** Read + verify the current session from the request cookies. */

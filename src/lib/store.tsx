@@ -552,10 +552,12 @@ export function useApp() {
 /** Convenience: the client currently being viewed in the client portal. */
 export function useCurrentClient() {
   const { clients, currentClientId, session } = useApp();
-  // A signed-in member is matched to their own client record by email.
+  // A signed-in member is linked to their own client record by id (or email).
   if (session?.role === "member") {
     return (
-      clients.find((c) => c.email.toLowerCase() === session.email.toLowerCase()) ?? null
+      clients.find((c) => c.id === session.clientId) ??
+      clients.find((c) => c.email.toLowerCase() === session.email.toLowerCase()) ??
+      null
     );
   }
   return clients.find((c) => c.id === currentClientId) ?? clients[0] ?? null;

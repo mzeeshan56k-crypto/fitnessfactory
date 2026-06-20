@@ -8,6 +8,7 @@ export interface SessionUser {
   email: string;
   name: string;
   role: Role;
+  clientId?: string; // for members: the client record they own
 }
 
 export const SESSION_COOKIE = "ffkc_session";
@@ -22,7 +23,7 @@ function secretKey() {
 }
 
 export async function signSession(user: SessionUser): Promise<string> {
-  return new SignJWT({ name: user.name, role: user.role })
+  return new SignJWT({ name: user.name, role: user.role, clientId: user.clientId })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.email)
     .setIssuedAt()
@@ -39,6 +40,7 @@ export async function verifySession(token: string | undefined | null): Promise<S
       email: String(payload.sub),
       name: String(payload.name ?? ""),
       role: payload.role as Role,
+      clientId: payload.clientId ? String(payload.clientId) : undefined,
     };
   } catch {
     return null;

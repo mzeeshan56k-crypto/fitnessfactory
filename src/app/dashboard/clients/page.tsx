@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Users, UserCheck, UserPlus, Activity, Plus, Search, ArrowRight, Loader2,
+  Mail, Check, KeyRound,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { useApp } from "@/lib/store";
-import { type ClientStatus } from "@/lib/data";
+import { type Client, type ClientStatus } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 const statusBadge: Record<ClientStatus, string> = {
@@ -37,7 +38,10 @@ const emptyForm = {
   status: "active" as ClientStatus,
   program: "",
   tags: "",
+  invite: true,
 };
+
+type AccessMap = Record<string, "invited" | "active">;
 
 function Loading() {
   return (
@@ -48,13 +52,31 @@ function Loading() {
 }
 
 export default function ClientsPage() {
-  const { clients, addClient, hydrated } = useApp();
+  const { clients, addClient, hydrated, settings } = useApp();
   const searchParams = useSearchParams();
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | ClientStatus>("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [sending, setSending] = useState(false);
+
+  const [access, setAccess] = useState<AccessMap>({});
+  const [invite, setInvite] = useState<{ email: string; url: string; sent: boolean; error?: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const loadAccess = useCallback(async () => {
+    try {
+      const res = await fetch("/api/clients/access");
+      if (res.ok) setAccess((await res.json()).access ?? {});
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAccess();
+  }, [loadAccess]);
 
   // Auto-open the modal when the URL has ?new=1
   useEffect(() => {
@@ -66,11 +88,31 @@ export default function ClientsPage() {
     setForm(emptyForm);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function sendInvite(client: Client) {
+    const res = await fetch("/api/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: client.name,
+        email: client.email,
+        role: "Client",
+        clientId: client.id,
+        businessName: settings.businessName,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "Could not create the invitation.");
+    setInvite({ email: client.email, url: data.inviteUrl, sent: !!data.sent, error: data.error });
+    await loadAccess();
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    addClient({
+    if (sending) return;
+    const email = form.email.trim();
+    const newClient = addClient({
       name: form.name.trim() || "New Client",
-      email: form.email.trim(),
+      email,
       goal: form.goal.trim() || "General fitness",
       phone: form.phone.trim(),
       startWeight: form.startWeight ? Number(form.startWeight) : 0,
@@ -78,19 +120,41 @@ export default function ClientsPage() {
       goalWeight: form.goalWeight ? Number(form.goalWeight) : 0,
       status: form.status,
       program: form.program.trim() || "Unassigned",
-      tags: form.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
+      tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
     });
-    closeModal();
+
+    if (form.invite && email) {
+      setSending(true);
+      try {
+        await sendInvite(newClient);
+        closeModal();
+      } catch (err) {
+        setInvite({ email, url: "", sent: false, error: err instanceof Error ? err.message : "Invite failed." });
+        closeModal();
+      } finally {
+        setSending(false);
+      }
+    } else {
+      closeModal();
+    }
+  }
+
+  async function copyLink() {
+    if (!invite?.url) return;
+    try {
+      await navigator.clipboard.writeText(invite.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
   }
 
   if (!hydrated) return <Loading />;
 
   const total = clients.length;
   const activeCount = clients.filter((c) => c.status === "active").length;
-  const pendingCount = clients.filter((c) => c.status === "pending").length;
+  const withLogin = Object.values(access).filter((a) => a === "active").length;
   const avgAdherence = total
     ? Math.round(clients.reduce((sum, c) => sum + c.adherence, 0) / total)
     : 0;
@@ -99,9 +163,7 @@ export default function ClientsPage() {
     const matchesStatus = status === "all" || c.status === status;
     const q = query.trim().toLowerCase();
     const matchesQuery =
-      q === "" ||
-      c.name.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q);
+      q === "" || c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
     return matchesStatus && matchesQuery;
   });
 
@@ -109,7 +171,7 @@ export default function ClientsPage() {
     <>
       <PageHeader
         title="Clients"
-        subtitle="Manage and track all your clients"
+        subtitle="Add clients, invite them to the app, and track progress"
         action={
           <button className="btn-primary" onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -121,7 +183,7 @@ export default function ClientsPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total clients" value={String(total)} icon={Users} />
         <StatCard label="Active" value={String(activeCount)} icon={UserCheck} />
-        <StatCard label="Pending" value={String(pendingCount)} icon={UserPlus} />
+        <StatCard label="With app login" value={String(withLogin)} icon={KeyRound} />
         <StatCard label="Avg adherence" value={`${avgAdherence}%`} icon={Activity} />
       </div>
 
@@ -130,7 +192,7 @@ export default function ClientsPage() {
           <EmptyState
             icon={Users}
             title="No clients yet"
-            description="Add your first client to start coaching."
+            description="Add your first client and invite them to the app to start coaching."
             action={
               <button className="btn-primary" onClick={() => setOpen(true)}>
                 <Plus className="h-4 w-4" />
@@ -173,67 +235,65 @@ export default function ClientsPage() {
           {/* Table header (desktop) */}
           <div className="mt-5 hidden grid-cols-12 gap-4 border-b border-ink-100 px-3 pb-3 text-xs font-semibold uppercase tracking-wide text-ink-400 lg:grid">
             <div className="col-span-4">Client</div>
-            <div className="col-span-2">Status</div>
+            <div className="col-span-2">App access</div>
             <div className="col-span-3">Goal</div>
             <div className="col-span-2">Adherence</div>
-            <div className="col-span-1 text-right">Active</div>
+            <div className="col-span-1 text-right">Open</div>
           </div>
 
           <div className="mt-2 space-y-2">
-            {filtered.map((c) => (
-              <Link
-                key={c.id}
-                href={`/dashboard/clients/${c.id}`}
-                className="group grid grid-cols-1 gap-4 rounded-xl border border-ink-100 p-3 transition hover:border-brand-200 hover:bg-brand-50/40 lg:grid-cols-12 lg:items-center lg:border-transparent"
-              >
-                {/* Client */}
-                <div className="col-span-4 flex items-center gap-3">
-                  <Avatar initials={c.avatar} />
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold text-ink-900">{c.name}</div>
-                    <div className="truncate text-xs text-ink-500">{c.email}</div>
-                    <div className="mt-0.5 text-xs text-ink-400 lg:hidden">{c.program}</div>
+            {filtered.map((c) => {
+              const acc = access[c.id];
+              return (
+                <Link
+                  key={c.id}
+                  href={`/dashboard/clients/${c.id}`}
+                  className="group grid grid-cols-1 gap-4 rounded-xl border border-ink-100 p-3 transition hover:border-brand-200 hover:bg-brand-50/40 lg:grid-cols-12 lg:items-center lg:border-transparent"
+                >
+                  <div className="col-span-4 flex items-center gap-3">
+                    <Avatar initials={c.avatar} />
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-ink-900">{c.name}</div>
+                      <div className="truncate text-xs text-ink-500">{c.email || "No email"}</div>
+                    </div>
                   </div>
-                </div>
 
-                {/* Status */}
-                <div className="col-span-2 flex items-center gap-2">
-                  <span className={cn("badge", statusBadge[c.status])}>
-                    {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
-                  </span>
-                  <span className="hidden text-xs text-ink-400 lg:hidden xl:inline">{c.program}</span>
-                </div>
-
-                {/* Goal + progress */}
-                <div className="col-span-3">
-                  <div className="mb-1 flex justify-between text-xs text-ink-500">
-                    <span className="truncate">{c.goal}</span>
-                    <span className="ml-2 shrink-0 font-medium text-ink-700">{c.progress}%</span>
+                  {/* App access */}
+                  <div className="col-span-2 flex items-center">
+                    {acc === "active" ? (
+                      <span className="badge bg-accent-500/15 text-accent-400"><Check className="h-3 w-3" /> Has login</span>
+                    ) : acc === "invited" ? (
+                      <span className="badge bg-amber-500/15 text-amber-400"><Mail className="h-3 w-3" /> Invited</span>
+                    ) : (
+                      <span className="badge bg-ink-100 text-ink-500">No login</span>
+                    )}
                   </div>
-                  <div className="h-2 w-full rounded-full bg-ink-100">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500"
-                      style={{ width: `${c.progress}%` }}
-                    />
+
+                  <div className="col-span-3">
+                    <div className="mb-1 flex justify-between text-xs text-ink-500">
+                      <span className="truncate">{c.goal}</span>
+                      <span className="ml-2 shrink-0 font-medium text-ink-700">{c.progress}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-ink-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500"
+                        style={{ width: `${c.progress}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
 
-                {/* Adherence */}
-                <div className="col-span-2 flex items-center gap-2 text-sm">
-                  <Activity className="h-4 w-4 text-brand-500" />
-                  <span className="font-semibold text-ink-900">{c.adherence}%</span>
-                </div>
+                  <div className="col-span-2 flex items-center gap-2 text-sm">
+                    <Activity className="h-4 w-4 text-brand-500" />
+                    <span className="font-semibold text-ink-900">{c.adherence}%</span>
+                  </div>
 
-                {/* Last active */}
-                <div className="col-span-1 flex items-center justify-between text-xs text-ink-500 lg:justify-end">
-                  <span className="lg:hidden">Last active</span>
-                  <span className="flex items-center gap-1">
-                    {c.lastActive}
+                  <div className="col-span-1 flex items-center justify-between text-xs text-ink-500 lg:justify-end">
+                    <span className={cn("badge lg:hidden", statusBadge[c.status])}>{c.status}</span>
                     <ArrowRight className="h-4 w-4 text-ink-300 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-                  </span>
-                </div>
-              </Link>
-            ))}
+                  </div>
+                </Link>
+              );
+            })}
 
             {filtered.length === 0 && (
               <p className="py-12 text-center text-sm text-ink-400">
@@ -244,6 +304,7 @@ export default function ClientsPage() {
         </div>
       )}
 
+      {/* Add client modal */}
       <Modal
         open={open}
         onClose={closeModal}
@@ -253,8 +314,8 @@ export default function ClientsPage() {
             <button type="button" className="btn-secondary" onClick={closeModal}>
               Cancel
             </button>
-            <button type="submit" form="add-client-form" className="btn-primary">
-              Add client
+            <button type="submit" form="add-client-form" className="btn-primary" disabled={sending}>
+              {sending ? <><Loader2 className="h-4 w-4 animate-spin" /> Adding…</> : "Add client"}
             </button>
           </>
         }
@@ -303,9 +364,7 @@ export default function ClientsPage() {
               <select
                 className="input"
                 value={form.status}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, status: e.target.value as ClientStatus }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as ClientStatus }))}
               >
                 <option value="active">Active</option>
                 <option value="pending">Pending</option>
@@ -335,15 +394,6 @@ export default function ClientsPage() {
             </Field>
           </div>
 
-          <Field label="Program">
-            <input
-              className="input"
-              value={form.program}
-              onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
-              placeholder="Strength Foundations"
-            />
-          </Field>
-
           <Field label="Tags (comma-separated)">
             <input
               className="input"
@@ -352,7 +402,64 @@ export default function ClientsPage() {
               placeholder="VIP, Weight loss"
             />
           </Field>
+
+          <label className="flex items-start gap-2.5 rounded-xl border border-ink-200 bg-ink-50/60 p-3 text-sm">
+            <input
+              type="checkbox"
+              checked={form.invite}
+              onChange={(e) => setForm((f) => ({ ...f, invite: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 accent-brand-500"
+            />
+            <span>
+              <span className="font-medium text-ink-900">Invite to the app</span>
+              <span className="block text-xs text-ink-500">
+                Emails {form.email || "the client"} a link to set a password and access their training.
+                Requires an email address.
+              </span>
+            </span>
+          </label>
         </form>
+      </Modal>
+
+      {/* Invite result */}
+      <Modal
+        open={Boolean(invite)}
+        onClose={() => { setInvite(null); setCopied(false); }}
+        title="Client invited"
+        footer={<button className="btn-primary" onClick={() => { setInvite(null); setCopied(false); }}>Done</button>}
+      >
+        {invite && (
+          <div className="space-y-4">
+            <div
+              className={cn(
+                "flex items-start gap-2 rounded-xl border p-3 text-sm",
+                invite.sent
+                  ? "border-accent-500/30 bg-accent-500/10 text-accent-400"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-400",
+              )}
+            >
+              <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                {invite.sent
+                  ? `Invitation emailed to ${invite.email}.`
+                  : invite.url
+                    ? `Invite created for ${invite.email}. Email isn't configured — share the link below.`
+                    : `Couldn't create the invite: ${invite.error}`}
+              </span>
+            </div>
+            {invite.url && (
+              <Field label="Invitation link">
+                <div className="flex gap-2">
+                  <input readOnly className="input" value={invite.url} onFocus={(e) => e.currentTarget.select()} />
+                  <button type="button" className="btn-secondary shrink-0" onClick={copyLink}>
+                    {copied ? <Check className="h-4 w-4" /> : null}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </Field>
+            )}
+          </div>
+        )}
       </Modal>
     </>
   );

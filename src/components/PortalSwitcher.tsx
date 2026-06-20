@@ -13,11 +13,13 @@ const portals = [
   { id: "admin", label: "Admin", href: "/admin", icon: Shield, match: "/admin" },
 ];
 
-// Which portals each role may switch to.
+// Which portals each role may switch to. Coaches manage members from client
+// profiles, so they don't "switch into" the member portal; only owner/admin
+// move between the Coach app and Admin.
 const ACCESS: Record<string, string[]> = {
-  owner: ["trainer", "client", "admin"],
-  admin: ["trainer", "client", "admin"],
-  coach: ["trainer", "client"],
+  owner: ["trainer", "admin"],
+  admin: ["trainer", "admin"],
+  coach: ["trainer"],
   member: ["client"],
 };
 

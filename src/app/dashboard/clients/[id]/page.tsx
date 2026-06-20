@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, MessageSquare, Pencil, Trash2, Scale, Target, Flag, Activity,
   Dumbbell, Calendar, Sparkles, Clock, Layers, LineChart, Loader2, Images,
+  Mail, Check, KeyRound,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
@@ -48,7 +49,7 @@ function Loading() {
 }
 
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
-  const { clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote } = useApp();
+  const { clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings } = useApp();
   const router = useRouter();
   const c = clients.find((x) => x.id === params.id);
 
@@ -74,6 +75,52 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   // Coach notes persist in the shared workspace, keyed by client.
   const notes = clientNotes[params.id] ?? [];
   const [draft, setDraft] = useState("");
+
+  // App-access status for this client (derived from accounts) + invite flow.
+  const [access, setAccess] = useState<"invited" | "active" | null>(null);
+  const [inviting, setInviting] = useState(false);
+  const [inviteRes, setInviteRes] = useState<{ url: string; sent: boolean; error?: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/clients/access")
+      .then((r) => (r.ok ? r.json() : { access: {} }))
+      .then((d) => { if (active) setAccess(d.access?.[params.id] ?? null); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [params.id]);
+
+  async function inviteToApp() {
+    if (!c?.email || inviting) return;
+    setInviting(true);
+    try {
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: c.name, email: c.email, role: "Client", clientId: c.id, businessName: settings.businessName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Could not create the invitation.");
+      setInviteRes({ url: data.inviteUrl, sent: !!data.sent, error: data.error });
+      setAccess("invited");
+    } catch (e) {
+      setInviteRes({ url: "", sent: false, error: e instanceof Error ? e.message : "Invite failed." });
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteRes?.url) return;
+    try {
+      await navigator.clipboard.writeText(inviteRes.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
 
   const [photos, , photosHydrated] = useLocalState<ProgressPhoto[]>(
     "ffkc-progress-photos",
@@ -197,7 +244,20 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {access === "active" ? (
+              <span className="badge bg-accent-500/15 text-accent-400"><KeyRound className="h-3 w-3" /> Has app login</span>
+            ) : (
+              <button
+                className="btn-secondary"
+                onClick={inviteToApp}
+                disabled={!c.email || inviting}
+                title={!c.email ? "Add an email first" : undefined}
+              >
+                {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                {access === "invited" ? "Re-invite" : "Invite to app"}
+              </button>
+            )}
             <Link href="/dashboard/messages" className="btn-secondary">
               <MessageSquare className="h-4 w-4" />
               Message
@@ -603,6 +663,47 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           Are you sure you want to delete <span className="font-semibold text-ink-900">{c.name}</span>?
           This will also remove their conversations and cannot be undone.
         </p>
+      </Modal>
+
+      {/* Invite result modal */}
+      <Modal
+        open={Boolean(inviteRes)}
+        onClose={() => { setInviteRes(null); setCopied(false); }}
+        title="Invitation"
+        footer={<button className="btn-primary" onClick={() => { setInviteRes(null); setCopied(false); }}>Done</button>}
+      >
+        {inviteRes && (
+          <div className="space-y-4">
+            <div
+              className={cn(
+                "flex items-start gap-2 rounded-xl border p-3 text-sm",
+                inviteRes.sent
+                  ? "border-accent-500/30 bg-accent-500/10 text-accent-400"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-400",
+              )}
+            >
+              <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                {inviteRes.sent
+                  ? `Invitation emailed to ${c.email}.`
+                  : inviteRes.url
+                    ? "Email isn't configured — share the link below."
+                    : `Couldn't create the invite: ${inviteRes.error}`}
+              </span>
+            </div>
+            {inviteRes.url && (
+              <Field label="Invitation link">
+                <div className="flex gap-2">
+                  <input readOnly className="input" value={inviteRes.url} onFocus={(e) => e.currentTarget.select()} />
+                  <button type="button" className="btn-secondary shrink-0" onClick={copyInviteLink}>
+                    {copied ? <Check className="h-4 w-4" /> : null}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </Field>
+            )}
+          </div>
+        )}
       </Modal>
     </>
   );

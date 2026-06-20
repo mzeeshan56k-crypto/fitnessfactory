@@ -20,9 +20,12 @@ interface Workspace {
 
 // Build a privacy-scoped view for a signed-in member: only their own client,
 // conversations, appointments and check-ins, the shared library, and settings
-// with the coach's AI key stripped out.
-function scopeForMember(ws: Workspace, email: string): Workspace {
-  const mine = (ws.clients ?? []).find((c) => c.email?.toLowerCase() === email.toLowerCase());
+// with the coach's AI key stripped out. The member is linked to their client
+// record by id (falling back to email).
+function scopeForMember(ws: Workspace, user: { email: string; clientId?: string }): Workspace {
+  const mine =
+    (user.clientId && (ws.clients ?? []).find((c) => c.id === user.clientId)) ||
+    (ws.clients ?? []).find((c) => c.email?.toLowerCase() === user.email.toLowerCase());
   const myId = mine?.id ?? null;
   const settings = { ...(ws.settings ?? {}) };
   delete (settings as Record<string, unknown>).aiApiKey;
@@ -51,7 +54,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
   const raw = (await kvGet<Workspace>(WORKSPACE_KEY)) ?? null;
-  const workspace = raw && user.role === "member" ? scopeForMember(raw, user.email) : raw;
+  const workspace = raw && user.role === "member" ? scopeForMember(raw, user) : raw;
   return NextResponse.json({ workspace, session: user });
 }
 

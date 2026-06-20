@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAccount, getAccount, normalizeEmail, updateAccount } from "@/lib/auth/accounts";
-import { getSessionUser } from "@/lib/auth/accounts";
+import { createAccount, getAccount, getSessionUser, normalizeEmail, updateAccount } from "@/lib/auth/accounts";
 import type { Role } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
@@ -10,6 +9,7 @@ interface InviteBody {
   email?: string;
   role?: string;
   businessName?: string;
+  clientId?: string;
 }
 
 const ROLE_MAP: Record<string, Role> = {
@@ -60,10 +60,11 @@ export async function POST(req: NextRequest) {
   }
 
   const tkn = token();
+  const clientId = body.clientId;
   if (existing) {
-    await updateAccount(email, { name, role, status: "invited", inviteToken: tkn });
+    await updateAccount(email, { name, role, status: "invited", inviteToken: tkn, clientId });
   } else {
-    await createAccount({ email, name, role, status: "invited", inviteToken: tkn });
+    await createAccount({ email, name, role, status: "invited", inviteToken: tkn, clientId });
   }
 
   const origin =

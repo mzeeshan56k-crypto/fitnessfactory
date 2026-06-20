@@ -34,7 +34,9 @@ export async function POST(req: NextRequest) {
   }
 
   const ws = (await kvGet<Workspace>(WORKSPACE_KEY)) ?? {};
-  const mine = (ws.clients ?? []).find((c) => c.email?.toLowerCase() === user.email.toLowerCase());
+  const mine =
+    (user.clientId && (ws.clients ?? []).find((c) => c.id === user.clientId)) ||
+    (ws.clients ?? []).find((c) => c.email?.toLowerCase() === user.email.toLowerCase());
   if (!mine) {
     return NextResponse.json({ error: "No client record is linked to your account yet." }, { status: 404 });
   }
