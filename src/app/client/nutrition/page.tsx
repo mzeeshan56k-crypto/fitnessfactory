@@ -138,7 +138,9 @@ const PHOTO_FOODS = [
 export default function ClientNutritionPage() {
   const app = useApp();
   const client = useCurrentClient();
-  const plan = app.mealPlans[0];
+  // Show the meal plan the coach assigned to this client (if any).
+  const assignedPlanId = client ? app.clientPlans[client.id]?.mealPlanId : undefined;
+  const plan = app.mealPlans.find((m) => m.id === assignedPlanId);
   const waterTarget = 8;
 
   const [logged, setLogged] = useLocalState<string[]>("ffkc-logged-meals", []);
