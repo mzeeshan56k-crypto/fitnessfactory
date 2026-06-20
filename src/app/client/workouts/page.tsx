@@ -40,6 +40,8 @@ export default function ClientWorkoutsPage() {
   const workouts = (plan?.workoutIds ?? [])
     .map((id) => app.workouts.find((w) => w.id === id))
     .filter((w): w is NonNullable<typeof w> => Boolean(w));
+  // Which assigned workouts they've already completed.
+  const completedIds = new Set((app.completions[c.id] ?? []).map((s) => s.workoutId));
 
   return (
     <div className="space-y-6">
@@ -65,8 +67,8 @@ export default function ClientWorkoutsPage() {
       ) : (
         <section className="space-y-3">
           {workouts.map((w, i) => {
-            const isToday = i === 0;
-            const isCompleted = i > 1;
+            const isCompleted = completedIds.has(w.id);
+            const isToday = !isCompleted && i === 0;
             return (
               <Link
                 key={w.id}

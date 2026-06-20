@@ -135,6 +135,17 @@ export interface ClientPlan {
   mealPlanId?: string;
 }
 
+// A logged training session the member completed (coach reviews these).
+export interface WorkoutCompletion {
+  id: string;
+  workoutId: string;
+  workoutName: string;
+  date: string; // ISO
+  setsLogged: number;
+  volume: number;
+  avgRpe: number;
+}
+
 // Client roster starts empty — coaches add their own real clients.
 export const clients: Client[] = [];
 

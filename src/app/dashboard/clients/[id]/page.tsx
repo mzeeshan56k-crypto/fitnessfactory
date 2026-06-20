@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, MessageSquare, Pencil, Trash2, Scale, Target, Flag, Activity,
   Dumbbell, Calendar, Sparkles, Clock, Layers, LineChart, Loader2, Images,
-  Mail, Check, KeyRound, X, Apple,
+  Mail, Check, KeyRound, X, Apple, CheckCircle2,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
@@ -51,7 +51,7 @@ function Loading() {
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
   const {
     clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings,
-    workouts: libWorkouts, programs, mealPlans, clientPlans,
+    workouts: libWorkouts, programs, mealPlans, clientPlans, completions,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan,
   } = useApp();
   const router = useRouter();
@@ -154,6 +154,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     .map((id) => libWorkouts.find((w) => w.id === id))
     .filter((w): w is NonNullable<typeof w> => Boolean(w));
   const unassignedWorkouts = libWorkouts.filter((w) => !plan.workoutIds.includes(w.id));
+  const sessions = completions[c.id] ?? [];
 
   const joined = new Date(c.joinedAt).toLocaleDateString("en-US", {
     year: "numeric",
@@ -468,6 +469,38 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                       <div className="mt-3 space-y-1.5 text-sm text-ink-500">
                         <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-ink-400" /> {w.durationMin} min</div>
                         <div className="flex items-center gap-2"><Layers className="h-4 w-4 text-ink-400" /> {w.exercises.length} exercises</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Completed sessions logged by the member */}
+            <div className="card p-6">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-accent-400" />
+                <h2 className="font-semibold text-ink-900">Recent sessions</h2>
+                <span className="badge bg-ink-100 text-ink-600">{sessions.length}</span>
+              </div>
+              <p className="mt-1 text-sm text-ink-500">Workouts {c.name.split(" ")[0]} has logged.</p>
+              {sessions.length === 0 ? (
+                <p className="mt-4 rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-6 text-center text-sm text-ink-400">
+                  No completed sessions yet — they&apos;ll appear here once the member finishes a workout.
+                </p>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {sessions.slice(0, 10).map((s) => (
+                    <div key={s.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-ink-100 p-3">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-accent-500" />
+                      <span className="font-medium text-ink-900">{s.workoutName}</span>
+                      <span className="text-xs text-ink-400">
+                        {new Date(s.date).toLocaleDateString()} · {new Date(s.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <div className="ml-auto flex items-center gap-3 text-xs text-ink-500">
+                        <span>{s.setsLogged} sets</span>
+                        {s.volume > 0 && <span>{s.volume.toLocaleString()} vol</span>}
+                        {s.avgRpe > 0 && <span>RPE {s.avgRpe}</span>}
                       </div>
                     </div>
                   ))}

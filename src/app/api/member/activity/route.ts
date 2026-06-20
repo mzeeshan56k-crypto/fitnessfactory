@@ -9,10 +9,15 @@ const WORKSPACE_KEY = "ffkc:workspace";
 interface Message { id: string; fromClient: boolean; text: string; time: string }
 interface Conversation { clientId: string; unread: number; messages: Message[] }
 interface CheckIn { id: string; clientId: string; date: string; answers: Record<string, string | number> }
+interface Completion {
+  id: string; workoutId: string; workoutName: string; date: string;
+  setsLogged: number; volume: number; avgRpe: number;
+}
 interface Workspace {
   clients?: { id: string; email: string }[];
   conversations?: Conversation[];
   checkins?: CheckIn[];
+  completions?: Record<string, Completion[]>;
   [k: string]: unknown;
 }
 
@@ -26,7 +31,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not authorized." }, { status: 403 });
   }
 
-  let body: { kind?: "message" | "checkin"; text?: string; answers?: Record<string, string | number> };
+  let body: {
+    kind?: "message" | "checkin" | "workout";
+    text?: string;
+    answers?: Record<string, string | number>;
+    completion?: Partial<Completion>;
+  };
   try {
     body = await req.json();
   } catch {
@@ -65,6 +75,19 @@ export async function POST(req: NextRequest) {
       answers: body.answers ?? {},
     };
     ws.checkins = [ci, ...(ws.checkins ?? [])];
+  } else if (body.kind === "workout") {
+    const c = body.completion ?? {};
+    const completion: Completion = {
+      id: uid("wc"),
+      workoutId: String(c.workoutId ?? ""),
+      workoutName: String(c.workoutName ?? "Workout"),
+      date: new Date().toISOString(),
+      setsLogged: Number(c.setsLogged ?? 0),
+      volume: Number(c.volume ?? 0),
+      avgRpe: Number(c.avgRpe ?? 0),
+    };
+    const all = ws.completions ?? {};
+    ws.completions = { ...all, [mine.id]: [completion, ...(all[mine.id] ?? [])] };
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

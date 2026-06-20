@@ -5,7 +5,7 @@ import {
 } from "react";
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
-  Appointment, ClientNote, FormReview, ClientPlan,
+  Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion,
 } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
@@ -81,6 +81,8 @@ export interface DB {
   recoveryNotes: Record<string, string>;
   // What the coach has assigned to each client, keyed by client id.
   clientPlans: Record<string, ClientPlan>;
+  // Completed training sessions logged by members, keyed by client id.
+  completions: Record<string, WorkoutCompletion[]>;
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -97,7 +99,7 @@ const emptyDB: DB = {
   clients: [], exercises: [], workouts: [], programs: [], mealPlans: [],
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
-  formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {},
+  formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {},
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -164,6 +166,8 @@ interface AppContextValue extends DB {
   toggleAssignedWorkout: (clientId: string, workoutId: string) => void;
   setClientProgram: (clientId: string, programId: string) => void;
   setClientMealPlan: (clientId: string, mealPlanId: string) => void;
+  // member logs a completed session
+  completeWorkout: (clientId: string, summary: Omit<WorkoutCompletion, "id" | "date">) => void;
   // users (admin)
   addUser: (u: Partial<PlatformUser>) => void;
   updateUser: (id: string, patch: Partial<PlatformUser>) => void;
@@ -518,6 +522,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clientPlans: { ...d.clientPlans, [clientId]: { ...(d.clientPlans[clientId] ?? { workoutIds: [] }), mealPlanId } },
     })), []);
 
+  const completeWorkout = useCallback((clientId: string, summary: Omit<WorkoutCompletion, "id" | "date">) => {
+    const completion: WorkoutCompletion = { id: uid("wc"), date: new Date().toISOString(), ...summary };
+    setDb((d) => ({
+      ...d,
+      completions: { ...d.completions, [clientId]: [completion, ...(d.completions[clientId] ?? [])] },
+    }));
+    // Members persist via the dedicated endpoint (they can't bulk-save).
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "workout", completion: summary }),
+      }).catch(() => {});
+    }
+  }, []);
+
   /* ----- users ----- */
   const addUser = useCallback((u: Partial<PlatformUser>) => {
     const initials = (u.name ?? "New User").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -559,7 +579,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan,
+    toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
     addUser, updateUser, removeUser,
     addBroadcast,
     updateSettings,
@@ -570,7 +590,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan,
+    toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);
 

@@ -78,12 +78,12 @@ export default function Page({ params }: { params: { id: string } }) {
       </div>
     );
 
-  return <WorkoutPlayer workout={workout} />;
+  return <WorkoutPlayer workout={workout} clientId={client.id} />;
 }
 
-function WorkoutPlayer({ workout }: { workout: import("@/lib/data").Workout }) {
+function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Workout; clientId: string }) {
   const w = workout;
-  const { exercises: exerciseLibrary } = useApp();
+  const { exercises: exerciseLibrary, completeWorkout } = useApp();
 
   // Build a stable default log map seeded from the prescribed sets.
   const defaultLog = useMemo<LogMap>(() => {
@@ -413,7 +413,18 @@ function WorkoutPlayer({ workout }: { workout: import("@/lib/data").Workout }) {
           <button
             type="button"
             disabled={!allDone}
-            onClick={() => setFinished(true)}
+            onClick={() => {
+              if (!finished) {
+                completeWorkout(clientId, {
+                  workoutId: w.id,
+                  workoutName: w.name,
+                  setsLogged: summary.logged,
+                  volume: Math.round(summary.volume),
+                  avgRpe: Number(summary.avgRpe.toFixed(1)),
+                });
+              }
+              setFinished(true);
+            }}
             className={cn(
               "btn-primary shrink-0 whitespace-nowrap",
               allDone && "bg-accent-500 hover:bg-accent-600",
