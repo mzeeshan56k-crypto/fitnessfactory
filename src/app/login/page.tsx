@@ -190,10 +190,21 @@ function LoginInner() {
             </form>
           )}
 
-          {ready && mode === "signup" && (
-            <p className="mt-4 text-center text-xs text-ink-400">
-              This is the first account, so it becomes the gym owner. Additional coaches and members join by invitation.
-            </p>
+          {ready && mode !== "accept" && (
+            <div className="mt-4 text-center text-xs text-ink-400">
+              {mode === "login" ? (
+                <button type="button" onClick={() => { setMode("signup"); setError(null); }} className="text-brand-400 hover:text-brand-500">
+                  Owner? Set up your account
+                </button>
+              ) : (
+                <>
+                  <p>Owner accounts are limited to authorized emails. Everyone else joins by invitation.</p>
+                  <button type="button" onClick={() => { setMode("login"); setError(null); }} className="mt-1 text-brand-400 hover:text-brand-500">
+                    Back to sign in
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
 

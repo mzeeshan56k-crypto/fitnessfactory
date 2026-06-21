@@ -4,8 +4,16 @@ import { signSession, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/se
 
 export const runtime = "nodejs";
 
-// First-run only: creates the gym owner account. Once an owner exists, new
-// accounts must come through invitations.
+function ownerAllowlist(): string[] {
+  return (process.env.OWNER_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+// Creates an owner account. Owners are restricted to the emails listed in the
+// OWNER_EMAILS environment variable. If that variable is not set, it falls back
+// to "first sign-up becomes owner" (optionally guarded by OWNER_SETUP_CODE).
 export async function POST(req: NextRequest) {
   let body: { name?: string; email?: string; password?: string; code?: string };
   try {
@@ -18,13 +26,6 @@ export async function POST(req: NextRequest) {
   const email = body.email ? normalizeEmail(body.email) : "";
   const password = body.password ?? "";
 
-  // Optional safeguard: if OWNER_SETUP_CODE is set, the owner sign-up requires it
-  // so a stranger can't claim the owner account on a public URL.
-  const requiredCode = process.env.OWNER_SETUP_CODE;
-  if (requiredCode && (body.code ?? "").trim() !== requiredCode) {
-    return NextResponse.json({ error: "Incorrect setup code." }, { status: 403 });
-  }
-
   if (!name || !email || !password) {
     return NextResponse.json({ error: "Name, email and password are required." }, { status: 400 });
   }
@@ -35,19 +36,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
   }
 
-  if (await hasOwner()) {
-    return NextResponse.json(
-      { error: "An owner account already exists. Ask your admin for an invitation." },
-      { status: 403 },
-    );
-  }
-  if (await getAccount(email)) {
-    return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
+  const allowlist = ownerAllowlist();
+
+  if (allowlist.length > 0) {
+    // Allowlist mode: only configured emails may create an owner account.
+    if (!allowlist.includes(email)) {
+      return NextResponse.json(
+        { error: "This email isn't authorized as an owner. Ask your coach for an invitation." },
+        { status: 403 },
+      );
+    }
+  } else {
+    // Fallback (no allowlist set): first sign-up becomes owner, optional code.
+    const requiredCode = process.env.OWNER_SETUP_CODE;
+    if (requiredCode && (body.code ?? "").trim() !== requiredCode) {
+      return NextResponse.json({ error: "Incorrect setup code." }, { status: 403 });
+    }
+    if (await hasOwner()) {
+      return NextResponse.json(
+        { error: "An owner account already exists. Ask your admin for an invitation." },
+        { status: 403 },
+      );
+    }
   }
 
+  const existing = await getAccount(email);
+  if (existing && existing.status === "active") {
+    return NextResponse.json({ error: "An account with this email already exists. Please sign in." }, { status: 409 });
+  }
+
+  // Create (or replace any invited placeholder for) the owner account.
   const account = await createAccount({ name, email, password, role: "owner", status: "active" });
-  const token = await signSession(toSessionUser(account));
 
+  const token = await signSession(toSessionUser(account));
   const res = NextResponse.json({ ok: true, user: toSessionUser(account) });
   res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
   return res;
