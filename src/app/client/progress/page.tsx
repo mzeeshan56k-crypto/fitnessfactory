@@ -10,7 +10,6 @@ import { weightTrend, strengthTrend } from "@/lib/data";
 import { WeightChart, StrengthChart } from "@/components/dashboard/Charts";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { PhotoCompare } from "@/components/PhotoCompare";
-import { useLocalState } from "@/lib/useLocalState";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { EmptyState } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
@@ -18,12 +17,6 @@ import { cn } from "@/lib/utils";
 interface CheckIn {
   weight: number;
   date: string;
-}
-
-interface ProgressPhoto {
-  id: string;
-  label: string;
-  dataUrl: string;
 }
 
 const measurements = [
@@ -52,32 +45,7 @@ export default function ClientProgressPage() {
     { weight: baseWeight + 2, date: "Jun 2" },
   ]);
   const [entry, setEntry] = useState("");
-
-  const [photos, setPhotos, photosHydrated] = useLocalState<ProgressPhoto[]>(
-    "ffkc-progress-photos",
-    [],
-  );
-
-  const addPhoto = (dataUrl: string | undefined) => {
-    if (!dataUrl) return;
-    const label = new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    setPhotos((prev) => [...prev, { id: `pp-${Date.now()}`, label, dataUrl }]);
-  };
-
-  const updatePhoto = (id: string, dataUrl: string | undefined) => {
-    if (!dataUrl) {
-      setPhotos((prev) => prev.filter((p) => p.id !== id));
-      return;
-    }
-    setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, dataUrl } : p)));
-  };
-
-  const removePhoto = (id: string) => {
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
-  };
+  const [uploading, setUploading] = useState(false);
 
   const addCheckIn = (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,6 +78,26 @@ export default function ClientProgressPage() {
 
   const lost = c.startWeight - c.currentWeight;
   const toGoal = Math.abs(c.currentWeight - c.goalWeight);
+
+  const photos = app.photos[c.id] ?? [];
+
+  async function handleAddPhoto(dataUrl?: string) {
+    if (!dataUrl || !c) return;
+    setUploading(true);
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl }),
+      });
+      const data = await res.json();
+      if (data.url) app.addPhoto(c.id, data.url);
+    } catch {
+      /* ignore */
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -253,35 +241,25 @@ export default function ClientProgressPage() {
           Snap a photo to track your transformation over time.
         </p>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {photosHydrated &&
-            photos.map((p) => (
-              <div key={p.id} className="space-y-1.5">
-                <div className="relative">
-                  <ImageUpload
-                    value={p.dataUrl}
-                    aspect="tall"
-                    onChange={(url) => updatePhoto(p.id, url)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removePhoto(p.id)}
-                    title="Remove photo"
-                    className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-ink-100/80 text-rose-400 shadow-soft transition hover:bg-ink-100"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="text-center text-xs font-medium text-ink-500">
-                  {p.label}
-                </div>
+          {photos.map((p) => (
+            <div key={p.id} className="space-y-1.5">
+              <div className="relative overflow-hidden rounded-2xl border border-ink-100 aspect-[3/4]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.url} alt={p.label} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => app.removePhoto(c.id, p.id)}
+                  title="Remove photo"
+                  className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-ink-100/80 text-rose-400 shadow-soft transition hover:bg-ink-100"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-            ))}
+              <div className="text-center text-xs font-medium text-ink-500">{p.label}</div>
+            </div>
+          ))}
           <div className="space-y-1.5">
-            <ImageUpload
-              aspect="tall"
-              label="Add photo"
-              onChange={addPhoto}
-            />
+            <ImageUpload aspect="tall" label={uploading ? "Uploading…" : "Add photo"} onChange={handleAddPhoto} />
             <div className="flex items-center justify-center gap-1 text-center text-xs font-medium text-ink-400">
               <Plus className="h-3 w-3" /> New photo
             </div>
@@ -296,13 +274,7 @@ export default function ClientProgressPage() {
           Pick two photos to see your transformation side by side.
         </p>
         <div className="mt-4">
-          {photosHydrated ? (
-            <PhotoCompare photos={photos} />
-          ) : (
-            <div className="flex h-32 items-center justify-center">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-ink-200 border-t-brand-600" />
-            </div>
-          )}
+          <PhotoCompare photos={photos.map((p) => ({ id: p.id, label: p.label, dataUrl: p.url }))} />
         </div>
       </section>
 

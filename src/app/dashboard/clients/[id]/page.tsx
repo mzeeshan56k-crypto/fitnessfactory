@@ -11,9 +11,9 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { PhotoCompare } from "@/components/PhotoCompare";
+import { ImageUpload } from "@/components/ui/ImageUpload";
 import { WeightChart, StrengthChart, AdherenceRing } from "@/components/dashboard/Charts";
 import { useApp } from "@/lib/store";
-import { useLocalState } from "@/lib/useLocalState";
 import {
   weightTrend, strengthTrend, type ClientStatus,
 } from "@/lib/data";
@@ -34,12 +34,6 @@ interface Note {
   text: string;
 }
 
-interface ProgressPhoto {
-  id: string;
-  label: string;
-  dataUrl: string;
-}
-
 function Loading() {
   return (
     <div className="flex items-center justify-center py-24 text-ink-400">
@@ -51,8 +45,8 @@ function Loading() {
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
   const {
     clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings,
-    workouts: libWorkouts, programs, mealPlans, clientPlans, completions,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan,
+    workouts: libWorkouts, programs, mealPlans, clientPlans, completions, photos,
+    toggleAssignedWorkout, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
   } = useApp();
   const router = useRouter();
   const c = clients.find((x) => x.id === params.id);
@@ -85,6 +79,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [inviting, setInviting] = useState(false);
   const [inviteRes, setInviteRes] = useState<{ url: string; sent: boolean; error?: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -126,11 +121,6 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     }
   }
 
-  const [photos, , photosHydrated] = useLocalState<ProgressPhoto[]>(
-    "ffkc-progress-photos",
-    [],
-  );
-
   if (!hydrated) return <Loading />;
 
   if (!c) {
@@ -155,6 +145,25 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     .filter((w): w is NonNullable<typeof w> => Boolean(w));
   const unassignedWorkouts = libWorkouts.filter((w) => !plan.workoutIds.includes(w.id));
   const sessions = completions[c.id] ?? [];
+  const clientPhotos = photos[c.id] ?? [];
+
+  async function handleCoachPhoto(dataUrl?: string) {
+    if (!dataUrl || !c) return;
+    setUploadingPhoto(true);
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl }),
+      });
+      const data = await res.json();
+      if (data.url) addPhoto(c.id, data.url);
+    } catch {
+      /* ignore */
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   const joined = new Date(c.joinedAt).toLocaleDateString("en-US", {
     year: "numeric",
@@ -547,28 +556,54 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         )}
 
         {tab === "Photos" && (
-          <div className="card p-6">
-            <div className="flex items-center gap-2">
-              <Images className="h-5 w-5 text-brand-400" />
-              <h2 className="font-semibold text-ink-900">Progress photo review</h2>
+          <div className="space-y-6">
+            <div className="card p-6">
+              <div className="flex items-center gap-2">
+                <Images className="h-5 w-5 text-brand-400" />
+                <h2 className="font-semibold text-ink-900">Progress photos</h2>
+                <span className="badge bg-ink-100 text-ink-600">{clientPhotos.length}</span>
+              </div>
+              <p className="mt-1 text-sm text-ink-500">
+                {c.name.split(" ")[0]}&rsquo;s photos and any you upload — shared between you both.
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {clientPhotos.map((p) => (
+                  <div key={p.id} className="space-y-1.5">
+                    <div className="relative aspect-[3/4] overflow-hidden rounded-2xl border border-ink-100">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.url} alt={p.label} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(c.id, p.id)}
+                        title="Remove photo"
+                        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-ink-100/80 text-rose-400 shadow-soft transition hover:bg-ink-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="text-center text-xs font-medium text-ink-500">{p.label}</div>
+                  </div>
+                ))}
+                <ImageUpload aspect="tall" label={uploadingPhoto ? "Uploading…" : "Add photo"} onChange={handleCoachPhoto} />
+              </div>
             </div>
-            <p className="mt-1 text-sm text-ink-500">
-              Compare {c.name}&rsquo;s photos side by side. Highlight and circle
-              areas of comparison directly on the &ldquo;After&rdquo; photo —
-              your annotations are saved automatically.
-            </p>
-            <div className="mt-4">
-              {photosHydrated ? (
+
+            <div className="card p-6">
+              <div className="flex items-center gap-2">
+                <Images className="h-5 w-5 text-brand-400" />
+                <h2 className="font-semibold text-ink-900">Side-by-side review</h2>
+              </div>
+              <p className="mt-1 text-sm text-ink-500">
+                Compare two photos and circle areas directly on the &ldquo;After&rdquo; photo —
+                your annotations are saved on this device.
+              </p>
+              <div className="mt-4">
                 <PhotoCompare
-                  photos={photos}
+                  photos={clientPhotos.map((p) => ({ id: p.id, label: p.label, dataUrl: p.url }))}
                   annotatable
                   storageKey={`ffkc-annotation-${params.id}`}
                 />
-              ) : (
-                <div className="flex h-32 items-center justify-center text-ink-400">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              )}
+              </div>
             </div>
           </div>
         )}

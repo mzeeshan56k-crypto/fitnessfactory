@@ -146,6 +146,14 @@ export interface WorkoutCompletion {
   avgRpe: number;
 }
 
+// A progress photo (image stored in Blob; only the URL lives in the workspace).
+export interface ProgressPhoto {
+  id: string;
+  label: string;
+  date: string; // ISO
+  url: string;
+}
+
 // Client roster starts empty — coaches add their own real clients.
 export const clients: Client[] = [];
 

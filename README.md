@@ -83,6 +83,13 @@ invitations still work — the app shows a **copyable link** you can send yourse
    If you skip this, the app falls back to Resend's shared `onboarding@resend.dev`
    sender, which is fine for testing.
 
+### 6. `BLOB_READ_WRITE_TOKEN`  — *optional (progress photos)*
+
+Stores progress-photo images. On Vercel: **Storage → Create → Blob**, connect it
+to the project, and this variable is injected automatically. Without it, photos
+still work (stored inline), but a Blob store is recommended for real image
+hosting.
+
 ### Summary
 
 | Variable | Required | Where it comes from |
@@ -92,6 +99,7 @@ invitations still work — the app shows a **copyable link** you can send yourse
 | `KV_REST_API_TOKEN` | ✅ (prod) | Vercel Storage → KV (auto-added) |
 | `RESEND_API_KEY` | optional | resend.com → API Keys |
 | `INVITE_FROM_EMAIL` | optional | a sender on your verified Resend domain |
+| `BLOB_READ_WRITE_TOKEN` | optional | Vercel Storage → Blob (auto-added) |
 
 ---
 

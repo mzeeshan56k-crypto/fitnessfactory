@@ -13,11 +13,13 @@ interface Completion {
   id: string; workoutId: string; workoutName: string; date: string;
   setsLogged: number; volume: number; avgRpe: number;
 }
+interface Photo { id: string; label: string; date: string; url: string }
 interface Workspace {
   clients?: { id: string; email: string }[];
   conversations?: Conversation[];
   checkins?: CheckIn[];
   completions?: Record<string, Completion[]>;
+  photos?: Record<string, Photo[]>;
   [k: string]: unknown;
 }
 
@@ -32,10 +34,12 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    kind?: "message" | "checkin" | "workout";
+    kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove";
     text?: string;
     answers?: Record<string, string | number>;
     completion?: Partial<Completion>;
+    photo?: Partial<Photo>;
+    photoId?: string;
   };
   try {
     body = await req.json();
@@ -88,6 +92,20 @@ export async function POST(req: NextRequest) {
     };
     const all = ws.completions ?? {};
     ws.completions = { ...all, [mine.id]: [completion, ...(all[mine.id] ?? [])] };
+  } else if (body.kind === "photo") {
+    const p = body.photo ?? {};
+    if (!p.url) return NextResponse.json({ error: "Missing photo." }, { status: 400 });
+    const photo: Photo = {
+      id: String(p.id || uid("pp")),
+      label: String(p.label || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })),
+      date: String(p.date || new Date().toISOString()),
+      url: String(p.url),
+    };
+    const all = ws.photos ?? {};
+    ws.photos = { ...all, [mine.id]: [...(all[mine.id] ?? []), photo] };
+  } else if (body.kind === "photo-remove") {
+    const all = ws.photos ?? {};
+    ws.photos = { ...all, [mine.id]: (all[mine.id] ?? []).filter((p) => p.id !== body.photoId) };
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

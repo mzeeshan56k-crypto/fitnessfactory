@@ -5,7 +5,7 @@ import {
 } from "react";
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
-  Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion,
+  Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto,
 } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
@@ -83,6 +83,8 @@ export interface DB {
   clientPlans: Record<string, ClientPlan>;
   // Completed training sessions logged by members, keyed by client id.
   completions: Record<string, WorkoutCompletion[]>;
+  // Progress photos, keyed by client id (shared between coach and member).
+  photos: Record<string, ProgressPhoto[]>;
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -99,7 +101,7 @@ const emptyDB: DB = {
   clients: [], exercises: [], workouts: [], programs: [], mealPlans: [],
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
-  formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {},
+  formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -168,6 +170,9 @@ interface AppContextValue extends DB {
   setClientMealPlan: (clientId: string, mealPlanId: string) => void;
   // member logs a completed session
   completeWorkout: (clientId: string, summary: Omit<WorkoutCompletion, "id" | "date">) => void;
+  // progress photos (shared coach ↔ member)
+  addPhoto: (clientId: string, url: string) => void;
+  removePhoto: (clientId: string, id: string) => void;
   // users (admin)
   addUser: (u: Partial<PlatformUser>) => void;
   updateUser: (id: string, patch: Partial<PlatformUser>) => void;
@@ -538,6 +543,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /* ----- progress photos ----- */
+  const addPhoto = useCallback((clientId: string, url: string) => {
+    const photo: ProgressPhoto = {
+      id: uid("pp"),
+      label: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      date: new Date().toISOString(),
+      url,
+    };
+    setDb((d) => ({ ...d, photos: { ...d.photos, [clientId]: [...(d.photos[clientId] ?? []), photo] } }));
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "photo", photo }),
+      }).catch(() => {});
+    }
+  }, []);
+  const removePhoto = useCallback((clientId: string, id: string) => {
+    setDb((d) => ({ ...d, photos: { ...d.photos, [clientId]: (d.photos[clientId] ?? []).filter((p) => p.id !== id) } }));
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "photo-remove", photoId: id }),
+      }).catch(() => {});
+    }
+  }, []);
+
   /* ----- users ----- */
   const addUser = useCallback((u: Partial<PlatformUser>) => {
     const initials = (u.name ?? "New User").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -580,6 +613,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
+    addPhoto, removePhoto,
     addUser, updateUser, removeUser,
     addBroadcast,
     updateSettings,
@@ -591,6 +625,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
+    addPhoto, removePhoto,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);
 
