@@ -7,6 +7,7 @@ import {
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
+import { ShareInvite } from "@/components/ui/ShareInvite";
 import { rolePermissions } from "@/lib/platform";
 import { useApp } from "@/lib/store";
 
@@ -267,14 +268,7 @@ export default function UsersPage() {
               </span>
             </div>
             {invite.url && (
-              <Field label="Invitation link">
-                <div className="flex gap-2">
-                  <input readOnly className="input" value={invite.url} onFocus={(e) => e.currentTarget.select()} />
-                  <button type="button" className="btn-secondary shrink-0" onClick={copyLink}>
-                    {copied ? <Check className="h-4 w-4" /> : null}{copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              </Field>
+              <ShareInvite url={invite.url} email={invite.email} business={app.settings.businessName} />
             )}
           </div>
         ) : (

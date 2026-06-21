@@ -34,8 +34,8 @@ function token() {
  */
 export async function POST(req: NextRequest) {
   const inviter = await getSessionUser();
-  if (!inviter || (inviter.role !== "owner" && inviter.role !== "admin")) {
-    return NextResponse.json({ error: "Only an owner or admin can invite users." }, { status: 403 });
+  if (!inviter || inviter.role === "member") {
+    return NextResponse.json({ error: "You don't have permission to invite users." }, { status: 403 });
   }
 
   let body: InviteBody;
@@ -49,6 +49,12 @@ export async function POST(req: NextRequest) {
   const name = body.name?.trim() || "there";
   const role = ROLE_MAP[body.role ?? "Member"] ?? "member";
   const business = body.businessName?.trim() || "Fitness Factory KC";
+
+  // Owner/admin can invite any role; coaches can invite clients (members).
+  const isStaff = inviter.role === "owner" || inviter.role === "admin";
+  if (!isStaff && role !== "member") {
+    return NextResponse.json({ error: "Coaches can only invite clients." }, { status: 403 });
+  }
 
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ error: "A valid email address is required." }, { status: 400 });

@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { PhotoCompare } from "@/components/PhotoCompare";
 import { ImageUpload } from "@/components/ui/ImageUpload";
+import { ShareInvite } from "@/components/ui/ShareInvite";
 import { WeightChart, StrengthChart, AdherenceRing } from "@/components/dashboard/Charts";
 import { useApp } from "@/lib/store";
 import {
@@ -849,15 +850,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               </span>
             </div>
             {inviteRes.url && (
-              <Field label="Invitation link">
-                <div className="flex gap-2">
-                  <input readOnly className="input" value={inviteRes.url} onFocus={(e) => e.currentTarget.select()} />
-                  <button type="button" className="btn-secondary shrink-0" onClick={copyInviteLink}>
-                    {copied ? <Check className="h-4 w-4" /> : null}
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              </Field>
+              <ShareInvite url={inviteRes.url} email={c.email} business={settings.businessName} />
             )}
           </div>
         )}

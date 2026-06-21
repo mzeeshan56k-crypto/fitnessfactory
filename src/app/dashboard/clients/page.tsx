@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
+import { ShareInvite } from "@/components/ui/ShareInvite";
 import { useApp } from "@/lib/store";
 import { type Client, type ClientStatus } from "@/lib/data";
 import { cn } from "@/lib/utils";
@@ -450,15 +451,7 @@ export default function ClientsPage() {
               </span>
             </div>
             {invite.url && (
-              <Field label="Invitation link">
-                <div className="flex gap-2">
-                  <input readOnly className="input" value={invite.url} onFocus={(e) => e.currentTarget.select()} />
-                  <button type="button" className="btn-secondary shrink-0" onClick={copyLink}>
-                    {copied ? <Check className="h-4 w-4" /> : null}
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              </Field>
+              <ShareInvite url={invite.url} email={invite.email} business={settings.businessName} />
             )}
           </div>
         )}
