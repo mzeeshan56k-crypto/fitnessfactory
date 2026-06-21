@@ -73,12 +73,19 @@ export async function POST(req: NextRequest) {
     await createAccount({ email, name, role, status: "invited", inviteToken: tkn, clientId });
   }
 
-  const origin =
+  // Always build invite links against the public/production site so they work
+  // for recipients (preview deployments are login-protected by Vercel).
+  // Priority: explicit APP_URL → Vercel production domain → request origin.
+  const base =
+    process.env.APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : "") ||
     req.headers.get("origin") ||
     req.nextUrl.origin ||
     `https://${req.headers.get("host") ?? "localhost:3000"}`;
   const inviteUrl =
-    `${origin}/login?invite=${tkn}&email=${encodeURIComponent(email)}&role=${encodeURIComponent(role)}`;
+    `${base.replace(/\/$/, "")}/login?invite=${tkn}&email=${encodeURIComponent(email)}&role=${encodeURIComponent(role)}`;
 
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.INVITE_FROM_EMAIL || "onboarding@resend.dev";
