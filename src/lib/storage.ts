@@ -1,40 +1,49 @@
-// Server-side key/value storage.
-//
-// In production it uses Upstash Redis (also what Vercel KV provisions). Set
-// either the Vercel KV variables (KV_REST_API_URL / KV_REST_API_TOKEN) or the
-// Upstash ones (UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN).
-//
-// With no KV configured it falls back to an in-memory store so the app still
-// boots locally — data is NOT persisted in that mode (a warning is logged).
+// Server-side key/value storage with three backends, picked automatically:
+//   1. Upstash REST  (KV_REST_API_URL + KV_REST_API_TOKEN, or UPSTASH_* names)
+//   2. Redis over TCP (REDIS_URL or KV_URL — e.g. "Official Redis for Vercel")
+//   3. Local JSON file (development only, when nothing is configured)
 import "server-only";
 import fs from "fs";
 import path from "path";
-import { Redis } from "@upstash/redis";
+import { Redis as UpstashRedis } from "@upstash/redis";
+import IORedis from "ioredis";
 
-const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const upstashUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const upstashToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const redisUrl = process.env.REDIS_URL || process.env.KV_URL;
 
-export const storageConfigured = Boolean(url && token);
+export const storageConfigured = Boolean((upstashUrl && upstashToken) || redisUrl);
 
-const redis = storageConfigured ? new Redis({ url: url!, token: token! }) : null;
+type GlobalStore = {
+  __ffkcUpstash?: UpstashRedis;
+  __ffkcIORedis?: IORedis;
+};
+const g = globalThis as unknown as GlobalStore;
 
-// Dev fallback: a JSON file in the working directory. Reliable across routes
-// and restarts for local development. Production MUST use KV (the file system
-// is read-only on serverless platforms), so a warning is logged if it runs
-// there.
+// Reuse a single client across warm serverless invocations.
+const upstash =
+  upstashUrl && upstashToken
+    ? g.__ffkcUpstash ?? (g.__ffkcUpstash = new UpstashRedis({ url: upstashUrl, token: upstashToken }))
+    : null;
+
+const ioredis =
+  !upstash && redisUrl
+    ? g.__ffkcIORedis ??
+      (g.__ffkcIORedis = new IORedis(redisUrl, { maxRetriesPerRequest: 3, lazyConnect: false }))
+    : null;
+
+// Local dev fallback: a JSON file in the working directory.
 const DEV_FILE = path.join(process.cwd(), ".ffkc-dev-store.json");
-
 let warned = false;
 function warnOnce() {
   if (!warned && process.env.NODE_ENV === "production") {
     warned = true;
     console.warn(
-      "[storage] No KV configured — falling back to a local file. This will NOT work on serverless. " +
-        "Set KV_REST_API_URL and KV_REST_API_TOKEN (Vercel KV / Upstash).",
+      "[storage] No KV/Redis configured — falling back to a local file (not for production). " +
+        "Set REDIS_URL, or KV_REST_API_URL + KV_REST_API_TOKEN.",
     );
   }
 }
-
 function readFile(): Record<string, unknown> {
   try {
     return JSON.parse(fs.readFileSync(DEV_FILE, "utf8"));
@@ -51,30 +60,40 @@ function writeFile(obj: Record<string, unknown>) {
 }
 
 export async function kvGet<T>(key: string): Promise<T | null> {
-  if (!redis) {
-    warnOnce();
-    return (readFile()[key] as T) ?? null;
+  if (upstash) return (await upstash.get<T>(key)) ?? null;
+  if (ioredis) {
+    const v = await ioredis.get(key);
+    return v ? (JSON.parse(v) as T) : null;
   }
-  return (await redis.get<T>(key)) ?? null;
+  warnOnce();
+  return (readFile()[key] as T) ?? null;
 }
 
 export async function kvSet<T>(key: string, value: T): Promise<void> {
-  if (!redis) {
-    warnOnce();
-    const obj = readFile();
-    obj[key] = value as unknown;
-    writeFile(obj);
+  if (upstash) {
+    await upstash.set(key, value);
     return;
   }
-  await redis.set(key, value);
+  if (ioredis) {
+    await ioredis.set(key, JSON.stringify(value));
+    return;
+  }
+  warnOnce();
+  const obj = readFile();
+  obj[key] = value as unknown;
+  writeFile(obj);
 }
 
 export async function kvDel(key: string): Promise<void> {
-  if (!redis) {
-    const obj = readFile();
-    delete obj[key];
-    writeFile(obj);
+  if (upstash) {
+    await upstash.del(key);
     return;
   }
-  await redis.del(key);
+  if (ioredis) {
+    await ioredis.del(key);
+    return;
+  }
+  const obj = readFile();
+  delete obj[key];
+  writeFile(obj);
 }
