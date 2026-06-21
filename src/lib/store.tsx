@@ -352,6 +352,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: uid("p"), name: p.name ?? "New Program", weeks: p.weeks ?? 8,
       workoutsPerWeek: p.workoutsPerWeek ?? 3, focus: p.focus ?? "General",
       clientsAssigned: p.clientsAssigned ?? 0, color: p.color ?? "from-brand-500 to-brand-700",
+      workoutIds: p.workoutIds ?? [],
     };
     setDb((d) => ({ ...d, programs: [program, ...d.programs] }));
     return program;
@@ -514,9 +515,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setClientProgram = useCallback((clientId: string, programId: string) =>
     setDb((d) => {
       const program = d.programs.find((p) => p.id === programId);
+      const current = d.clientPlans[clientId] ?? { workoutIds: [] };
+      // Assigning a program auto-fills the client's workouts from that program.
+      const workoutIds = program?.workoutIds?.length ? [...program.workoutIds] : current.workoutIds;
       return {
         ...d,
-        clientPlans: { ...d.clientPlans, [clientId]: { ...(d.clientPlans[clientId] ?? { workoutIds: [] }), programId } },
+        clientPlans: { ...d.clientPlans, [clientId]: { ...current, programId, workoutIds } },
         // Keep the client's display program name in sync.
         clients: program ? d.clients.map((c) => (c.id === clientId ? { ...c, program: program.name } : c)) : d.clients,
       };

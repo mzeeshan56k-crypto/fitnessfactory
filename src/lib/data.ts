@@ -67,6 +67,7 @@ export interface Program {
   focus: string;
   clientsAssigned: number;
   color: string;
+  workoutIds?: string[]; // the workouts this program delivers
 }
 
 export interface MealPlan {

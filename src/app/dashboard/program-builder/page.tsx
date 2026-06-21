@@ -84,14 +84,20 @@ export default function ProgramBuilderPage() {
 
   function saveProgram(e: React.FormEvent) {
     e.preventDefault();
+    // Collect the unique workouts placed across the schedule.
+    const workoutIds = Array.from(new Set(Object.values(assignments).flat()));
     app.addProgram({
       name: meta.name.trim() || "Untitled Program",
       weeks,
       workoutsPerWeek: Math.max(1, Number(meta.workoutsPerWeek) || 1),
       focus: meta.focus.trim() || "General",
       color: meta.color,
+      workoutIds,
     });
     setSaved(true);
+    // Reset the builder for the next program.
+    setAssignments({});
+    setMeta({ name: "", weeks: 8, workoutsPerWeek: 3, focus: "Strength", color: colorOptions[0].value });
   }
 
   return (
@@ -327,7 +333,7 @@ export default function ProgramBuilderPage() {
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <span className="badge bg-ink-100 text-ink-600">{p.weeks} weeks</span>
                     <span className="badge bg-ink-100 text-ink-600">{p.workoutsPerWeek}×/week</span>
-                    <span className="badge bg-accent-500/15 text-accent-400">{p.clientsAssigned} assigned</span>
+                    <span className="badge bg-accent-500/15 text-accent-400">{p.workoutIds?.length ?? 0} workouts</span>
                   </div>
                 </div>
               </div>

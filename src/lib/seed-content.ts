@@ -296,11 +296,11 @@ export const seedWorkouts: Workout[] = [
 /* -------------------------------------------------------------------------- */
 
 export const seedPrograms: Program[] = [
-  { id: "pg_fat_loss_8wk", name: "8-Week Fat Loss", weeks: 8, workoutsPerWeek: 4, focus: "Fat loss", clientsAssigned: 0, color: "from-accent-400 to-accent-600" },
-  { id: "pg_hypertrophy_12wk", name: "12-Week Hypertrophy", weeks: 12, workoutsPerWeek: 5, focus: "Muscle gain", clientsAssigned: 0, color: "from-brand-500 to-brand-700" },
-  { id: "pg_strength_5x5", name: "5x5 Strength Foundations", weeks: 10, workoutsPerWeek: 3, focus: "Strength", clientsAssigned: 0, color: "from-purple-500 to-indigo-600" },
-  { id: "pg_beginner_full_body", name: "Beginner Full-Body", weeks: 6, workoutsPerWeek: 3, focus: "General fitness", clientsAssigned: 0, color: "from-amber-400 to-orange-500" },
-  { id: "pg_conditioning_endurance", name: "Conditioning & Endurance", weeks: 8, workoutsPerWeek: 4, focus: "Endurance", clientsAssigned: 0, color: "from-sky-500 to-blue-600" },
+  { id: "pg_fat_loss_8wk", name: "8-Week Fat Loss", weeks: 8, workoutsPerWeek: 4, focus: "Fat loss", clientsAssigned: 0, color: "from-accent-400 to-accent-600", workoutIds: ["wk_fat_loss_circuit", "wk_hiit_blast", "wk_metcon", "wk_full_body_express"] },
+  { id: "pg_hypertrophy_12wk", name: "12-Week Hypertrophy", weeks: 12, workoutsPerWeek: 5, focus: "Muscle gain", clientsAssigned: 0, color: "from-brand-500 to-brand-700", workoutIds: ["wk_push_day", "wk_pull_day", "wk_leg_day", "wk_upper_hypertrophy", "wk_lower_hypertrophy"] },
+  { id: "pg_strength_5x5", name: "5x5 Strength Foundations", weeks: 10, workoutsPerWeek: 3, focus: "Strength", clientsAssigned: 0, color: "from-purple-500 to-indigo-600", workoutIds: ["wk_strength_squat", "wk_strength_deadlift", "wk_strength_upper"] },
+  { id: "pg_beginner_full_body", name: "Beginner Full-Body", weeks: 6, workoutsPerWeek: 3, focus: "General fitness", clientsAssigned: 0, color: "from-amber-400 to-orange-500", workoutIds: ["wk_full_body_a", "wk_full_body_b", "wk_beginner_intro"] },
+  { id: "pg_conditioning_endurance", name: "Conditioning & Endurance", weeks: 8, workoutsPerWeek: 4, focus: "Endurance", clientsAssigned: 0, color: "from-sky-500 to-blue-600", workoutIds: ["wk_endurance_row", "wk_endurance_run", "wk_metcon", "wk_hiit_blast"] },
 ];
 
 /* -------------------------------------------------------------------------- */
