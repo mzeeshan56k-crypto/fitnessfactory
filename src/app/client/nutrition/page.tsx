@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Apple, Flame, CheckCircle2, Circle, Droplet, Plus, Minus, Utensils,
@@ -143,9 +143,28 @@ export default function ClientNutritionPage() {
   const plan = app.mealPlans.find((m) => m.id === assignedPlanId);
   const waterTarget = 8;
 
-  const [logged, setLogged] = useLocalState<string[]>("ffkc-logged-meals", []);
-  const [water, setWater] = useLocalState<number>("ffkc-water", 4);
-  const [foodLog, setFoodLog] = useLocalState<FoodEntry[]>("ffkc-foodlog", []);
+  // Nutrition diary persists in the shared workspace (scoped to this member).
+  const [logged, setLogged] = useState<string[]>([]);
+  const [water, setWater] = useState<number>(4);
+  const [foodLog, setFoodLog] = useState<FoodEntry[]>([]);
+  const nutritionLoaded = useRef(false);
+
+  useEffect(() => {
+    if (!client) return;
+    const log = app.nutritionLogs[client.id];
+    setLogged(log?.logged ?? []);
+    setWater(log?.water ?? 4);
+    setFoodLog(log?.foodLog ?? []);
+    nutritionLoaded.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client?.id, app.hydrated]);
+
+  useEffect(() => {
+    if (!client || !nutritionLoaded.current || app.session?.role !== "member") return;
+    const t = setTimeout(() => app.setNutritionLog(client.id, { water, foodLog, logged }), 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [water, foodLog, logged]);
   const [aiPlan, setAiPlan] = useLocalState<GenPlan | null>("ffkc-ai-meal", null);
   const [recipes, setRecipes] = useLocalState<Recipe[]>("ffkc-recipes", SEED_RECIPES);
   const [supplements, setSupplements] = useLocalState<Supplement[]>("ffkc-supplements", SEED_SUPPLEMENTS);

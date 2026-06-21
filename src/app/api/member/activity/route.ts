@@ -14,12 +14,15 @@ interface Completion {
   setsLogged: number; volume: number; avgRpe: number;
 }
 interface Photo { id: string; label: string; date: string; url: string }
+interface FoodEntry { id: string; name: string; kcal: number }
+interface NutritionLog { water: number; foodLog: FoodEntry[]; logged: string[] }
 interface Workspace {
   clients?: { id: string; email: string }[];
   conversations?: Conversation[];
   checkins?: CheckIn[];
   completions?: Record<string, Completion[]>;
   photos?: Record<string, Photo[]>;
+  nutritionLogs?: Record<string, NutritionLog>;
   [k: string]: unknown;
 }
 
@@ -34,12 +37,13 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove";
+    kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition";
     text?: string;
     answers?: Record<string, string | number>;
     completion?: Partial<Completion>;
     photo?: Partial<Photo>;
     photoId?: string;
+    log?: NutritionLog;
   };
   try {
     body = await req.json();
@@ -106,6 +110,15 @@ export async function POST(req: NextRequest) {
   } else if (body.kind === "photo-remove") {
     const all = ws.photos ?? {};
     ws.photos = { ...all, [mine.id]: (all[mine.id] ?? []).filter((p) => p.id !== body.photoId) };
+  } else if (body.kind === "nutrition") {
+    const log = body.log;
+    if (!log) return NextResponse.json({ error: "Missing log." }, { status: 400 });
+    const safe: NutritionLog = {
+      water: Number(log.water) || 0,
+      foodLog: Array.isArray(log.foodLog) ? log.foodLog.slice(0, 200) : [],
+      logged: Array.isArray(log.logged) ? log.logged.slice(0, 100) : [],
+    };
+    ws.nutritionLogs = { ...(ws.nutritionLogs ?? {}), [mine.id]: safe };
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

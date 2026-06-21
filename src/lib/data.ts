@@ -155,6 +155,18 @@ export interface ProgressPhoto {
   url: string;
 }
 
+// A member's nutrition diary (their own daily logging).
+export interface FoodEntry {
+  id: string;
+  name: string;
+  kcal: number;
+}
+export interface NutritionLog {
+  water: number;
+  foodLog: FoodEntry[];
+  logged: string[]; // names of assigned plan meals checked off
+}
+
 // Client roster starts empty — coaches add their own real clients.
 export const clients: Client[] = [];
 

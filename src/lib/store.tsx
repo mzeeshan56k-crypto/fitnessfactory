@@ -5,7 +5,7 @@ import {
 } from "react";
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
-  Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto,
+  Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto, NutritionLog,
 } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
@@ -85,6 +85,8 @@ export interface DB {
   completions: Record<string, WorkoutCompletion[]>;
   // Progress photos, keyed by client id (shared between coach and member).
   photos: Record<string, ProgressPhoto[]>;
+  // Members' nutrition diaries, keyed by client id.
+  nutritionLogs: Record<string, NutritionLog>;
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -102,6 +104,7 @@ const emptyDB: DB = {
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
   formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
+  nutritionLogs: {},
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -173,6 +176,8 @@ interface AppContextValue extends DB {
   // progress photos (shared coach ↔ member)
   addPhoto: (clientId: string, url: string) => void;
   removePhoto: (clientId: string, id: string) => void;
+  // member nutrition diary
+  setNutritionLog: (clientId: string, log: NutritionLog) => void;
   // users (admin)
   addUser: (u: Partial<PlatformUser>) => void;
   updateUser: (id: string, patch: Partial<PlatformUser>) => void;
@@ -575,6 +580,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /* ----- member nutrition diary ----- */
+  const setNutritionLog = useCallback((clientId: string, log: NutritionLog) => {
+    setDb((d) => ({ ...d, nutritionLogs: { ...d.nutritionLogs, [clientId]: log } }));
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "nutrition", log }),
+      }).catch(() => {});
+    }
+  }, []);
+
   /* ----- users ----- */
   const addUser = useCallback((u: Partial<PlatformUser>) => {
     const initials = (u.name ?? "New User").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -617,7 +634,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
-    addPhoto, removePhoto,
+    addPhoto, removePhoto, setNutritionLog,
     addUser, updateUser, removeUser,
     addBroadcast,
     updateSettings,
@@ -629,7 +646,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
-    addPhoto, removePhoto,
+    addPhoto, removePhoto, setNutritionLog,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);
 
