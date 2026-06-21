@@ -25,6 +25,8 @@ function LoginInner() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState(inviteEmail ?? "");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [codeRequired, setCodeRequired] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +38,9 @@ function LoginInner() {
       try {
         const res = await fetch("/api/auth/status");
         const data = await res.json();
-        if (active && !data.hasOwner) setMode("signup");
+        if (!active) return;
+        if (!data.hasOwner) setMode("signup");
+        setCodeRequired(Boolean(data.signupCodeRequired));
       } catch {
         /* default to login */
       } finally {
@@ -62,7 +66,7 @@ function LoginInner() {
 
       const payload =
         mode === "signup"
-          ? { name, email, password }
+          ? { name, email, password, code }
           : mode === "accept"
             ? { name, email: inviteEmail, token: inviteToken, password }
             : { email, password };
@@ -159,6 +163,20 @@ function LoginInner() {
                   <p className="mt-1 text-xs text-ink-400">At least 8 characters.</p>
                 )}
               </div>
+
+              {mode === "signup" && codeRequired && (
+                <div>
+                  <label className="label" htmlFor="code">Setup code</label>
+                  <input
+                    id="code" required
+                    value={code} onChange={(e) => setCode(e.target.value)}
+                    className="input" placeholder="Enter the owner setup code"
+                  />
+                  <p className="mt-1 text-xs text-ink-400">
+                    Required to create the owner account.
+                  </p>
+                </div>
+              )}
 
               {error && (
                 <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-400">

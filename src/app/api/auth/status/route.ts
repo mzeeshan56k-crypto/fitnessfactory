@@ -10,5 +10,6 @@ export async function GET() {
   return NextResponse.json({
     hasOwner: await hasOwner(),
     storageConfigured,
+    signupCodeRequired: Boolean(process.env.OWNER_SETUP_CODE),
   });
 }

@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 // First-run only: creates the gym owner account. Once an owner exists, new
 // accounts must come through invitations.
 export async function POST(req: NextRequest) {
-  let body: { name?: string; email?: string; password?: string };
+  let body: { name?: string; email?: string; password?: string; code?: string };
   try {
     body = await req.json();
   } catch {
@@ -17,6 +17,13 @@ export async function POST(req: NextRequest) {
   const name = body.name?.trim() || "";
   const email = body.email ? normalizeEmail(body.email) : "";
   const password = body.password ?? "";
+
+  // Optional safeguard: if OWNER_SETUP_CODE is set, the owner sign-up requires it
+  // so a stranger can't claim the owner account on a public URL.
+  const requiredCode = process.env.OWNER_SETUP_CODE;
+  if (requiredCode && (body.code ?? "").trim() !== requiredCode) {
+    return NextResponse.json({ error: "Incorrect setup code." }, { status: 403 });
+  }
 
   if (!name || !email || !password) {
     return NextResponse.json({ error: "Name, email and password are required." }, { status: 400 });
