@@ -378,11 +378,12 @@ export const dripCampaigns: DripCampaign[] = [
   },
 ];
 
+// Available integration targets — none are connected until the gym sets them up.
 export const integrations = [
-  { id: "i1", name: "GoHighLevel", desc: "CRM & funnel sync", status: "connected", color: "bg-blue-500" },
-  { id: "i2", name: "Trainerize", desc: "Migrate clients & programs", status: "connected", color: "bg-purple-500" },
-  { id: "i3", name: "Zapier", desc: "5,000+ app automations", status: "connected", color: "bg-orange-500" },
-  { id: "i4", name: "Stripe", desc: "Payments & billing", status: "connected", color: "bg-indigo-500" },
+  { id: "i1", name: "GoHighLevel", desc: "CRM & funnel sync", status: "available", color: "bg-blue-500" },
+  { id: "i2", name: "Trainerize", desc: "Migrate clients & programs", status: "available", color: "bg-purple-500" },
+  { id: "i3", name: "Zapier", desc: "5,000+ app automations", status: "available", color: "bg-orange-500" },
+  { id: "i4", name: "Stripe", desc: "Payments & billing", status: "available", color: "bg-indigo-500" },
   { id: "i5", name: "Google Calendar", desc: "Two-way schedule sync", status: "available", color: "bg-emerald-500" },
   { id: "i6", name: "Apple Health", desc: "Steps, sleep, heart rate", status: "available", color: "bg-rose-500" },
 ];
