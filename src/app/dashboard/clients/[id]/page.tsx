@@ -842,7 +842,9 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 {inviteRes.sent
                   ? `Invitation emailed to ${c.email}.`
                   : inviteRes.url
-                    ? "Email isn't configured — share the link below."
+                    ? inviteRes.error
+                      ? `Invite created, but the email couldn't be sent: ${inviteRes.error}. Share the link below.`
+                      : "Email isn't configured — share the link below."
                     : `Couldn't create the invite: ${inviteRes.error}`}
               </span>
             </div>

@@ -443,7 +443,9 @@ export default function ClientsPage() {
                 {invite.sent
                   ? `Invitation emailed to ${invite.email}.`
                   : invite.url
-                    ? `Invite created for ${invite.email}. Email isn't configured — share the link below.`
+                    ? invite.error
+                      ? `Invite created for ${invite.email}, but the email couldn't be sent: ${invite.error}. Share the link below.`
+                      : `Invite created for ${invite.email}. Email isn't configured — share the link below.`
                     : `Couldn't create the invite: ${invite.error}`}
               </span>
             </div>
