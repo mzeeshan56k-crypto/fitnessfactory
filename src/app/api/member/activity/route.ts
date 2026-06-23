@@ -16,13 +16,15 @@ interface Completion {
 interface Photo { id: string; label: string; date: string; url: string }
 interface FoodEntry { id: string; name: string; kcal: number }
 interface NutritionLog { water: number; foodLog: FoodEntry[]; logged: string[] }
+interface WeightEntry { date: string; weight: number }
 interface Workspace {
-  clients?: { id: string; email: string }[];
+  clients?: { id: string; email: string; currentWeight?: number }[];
   conversations?: Conversation[];
   checkins?: CheckIn[];
   completions?: Record<string, Completion[]>;
   photos?: Record<string, Photo[]>;
   nutritionLogs?: Record<string, NutritionLog>;
+  weightLogs?: Record<string, WeightEntry[]>;
   [k: string]: unknown;
 }
 
@@ -37,13 +39,14 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition";
+    kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight";
     text?: string;
     answers?: Record<string, string | number>;
     completion?: Partial<Completion>;
     photo?: Partial<Photo>;
     photoId?: string;
     log?: NutritionLog;
+    weight?: number;
   };
   try {
     body = await req.json();
@@ -119,6 +122,16 @@ export async function POST(req: NextRequest) {
       logged: Array.isArray(log.logged) ? log.logged.slice(0, 100) : [],
     };
     ws.nutritionLogs = { ...(ws.nutritionLogs ?? {}), [mine.id]: safe };
+  } else if (body.kind === "weight") {
+    const weight = Number(body.weight);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      return NextResponse.json({ error: "Invalid weight." }, { status: 400 });
+    }
+    const entry: WeightEntry = { date: new Date().toISOString(), weight };
+    const all = ws.weightLogs ?? {};
+    ws.weightLogs = { ...all, [mine.id]: [entry, ...(all[mine.id] ?? [])].slice(0, 365) };
+    // Keep the client's headline weight in sync.
+    ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, currentWeight: weight } : c));
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

@@ -22,6 +22,8 @@ export interface Client {
   joinedAt: string;
   phone: string;
   tags: string[];
+  coachEmail?: string; // the trainer this client is assigned to
+  coachName?: string; // the assigned trainer's display name (shown to the member)
 }
 
 export interface Exercise {
@@ -165,6 +167,12 @@ export interface NutritionLog {
   water: number;
   foodLog: FoodEntry[];
   logged: string[]; // names of assigned plan meals checked off
+}
+
+// A logged bodyweight entry (member logs these; coach sees the trend).
+export interface WeightEntry {
+  date: string; // ISO
+  weight: number;
 }
 
 // Client roster starts empty — coaches add their own real clients.

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, MessageSquare, Pencil, Trash2, Scale, Target, Flag, Activity,
   Dumbbell, Calendar, Sparkles, Clock, Layers, LineChart, Loader2, Images,
-  Mail, Check, KeyRound, X, Apple, CheckCircle2,
+  Mail, Check, KeyRound, X, Apple, CheckCircle2, ClipboardCheck, UserCog,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
@@ -47,8 +47,10 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const {
     clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings,
     workouts: libWorkouts, programs, mealPlans, clientPlans, completions, photos,
+    weightLogs, checkins, nutritionLogs, session, assignCoach,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
   } = useApp();
+  const [coaches, setCoaches] = useState<{ email: string; name: string; role: string }[]>([]);
   const router = useRouter();
   const c = clients.find((x) => x.id === params.id);
 
@@ -91,6 +93,24 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     return () => { active = false; };
   }, [params.id]);
 
+  // Owner/admin can reassign the client's trainer — load the coach list.
+  const isStaffAdmin = session?.role === "owner" || session?.role === "admin";
+  useEffect(() => {
+    if (!isStaffAdmin) return;
+    let active = true;
+    fetch("/api/accounts")
+      .then((r) => (r.ok ? r.json() : { accounts: [] }))
+      .then((d) => {
+        if (!active) return;
+        const list = (d.accounts ?? []).filter(
+          (a: { role: string }) => a.role === "coach" || a.role === "admin" || a.role === "owner",
+        );
+        setCoaches(list);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [isStaffAdmin]);
+
   async function inviteToApp() {
     if (!c?.email || inviting) return;
     setInviting(true);
@@ -124,12 +144,21 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
   if (!hydrated) return <Loading />;
 
-  if (!c) {
+  // A coach may only open clients assigned to them.
+  const coachBlocked =
+    !!c && session?.role === "coach" &&
+    (c.coachEmail ?? "").toLowerCase() !== session.email.toLowerCase();
+
+  if (!c || coachBlocked) {
     return (
       <div className="py-24 text-center">
-        <h1 className="text-xl font-bold text-ink-900">Client not found</h1>
+        <h1 className="text-xl font-bold text-ink-900">
+          {coachBlocked ? "Not your client" : "Client not found"}
+        </h1>
         <p className="mt-2 text-sm text-ink-500">
-          This client may have been removed.
+          {coachBlocked
+            ? "This client is assigned to another trainer."
+            : "This client may have been removed."}
         </p>
         <Link href="/dashboard/clients" className="btn-primary mt-6 inline-flex">
           <ArrowLeft className="h-4 w-4" />
@@ -147,6 +176,17 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const unassignedWorkouts = libWorkouts.filter((w) => !plan.workoutIds.includes(w.id));
   const sessions = completions[c.id] ?? [];
   const clientPhotos = photos[c.id] ?? [];
+  const weightLog = weightLogs[c.id] ?? [];
+  const clientCheckins = checkins.filter((ci) => ci.clientId === c.id);
+  const nutrition = nutritionLogs[c.id];
+  const weightChart = [...weightLog]
+    .slice(0, 30)
+    .reverse()
+    .map((w) => ({
+      week: new Date(w.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      weight: w.weight,
+      target: c.goalWeight,
+    }));
 
   async function handleCoachPhoto(dataUrl?: string) {
     if (!dataUrl || !c) return;
@@ -342,6 +382,31 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <InfoRow icon={Calendar} label="Joined" value={joined} />
               </div>
 
+              {/* Trainer assignment (owner/admin only) */}
+              {isStaffAdmin && (
+                <div className="mt-6 rounded-xl border border-ink-100 bg-ink-50/40 p-4">
+                  <label className="label flex items-center gap-1.5">
+                    <UserCog className="h-3.5 w-3.5" /> Assigned trainer
+                  </label>
+                  <select
+                    className="input"
+                    value={c.coachEmail ?? ""}
+                    onChange={(e) => {
+                      const coach = coaches.find((co) => co.email === e.target.value);
+                      assignCoach(c.id, e.target.value, coach?.name ?? "");
+                    }}
+                  >
+                    <option value="">Unassigned</option>
+                    {coaches.map((co) => (
+                      <option key={co.email} value={co.email}>{co.name} · {co.role}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-xs text-ink-400">
+                    Only this trainer (plus you) sees this client and their conversations.
+                  </p>
+                </div>
+              )}
+
               <div className="mt-6 rounded-xl border border-brand-100 bg-brand-50/50 p-4">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-brand-400" />
@@ -521,39 +586,61 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         )}
 
         {tab === "Progress" && (
-          seeded ? (
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="card p-6">
-                <h2 className="font-semibold text-ink-900">Weight trend</h2>
-                <p className="text-sm text-ink-500">Actual vs target (lb)</p>
-                <div className="mt-4">
-                  <WeightChart data={weightTrend} />
-                </div>
-              </div>
-              <div className="card p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="font-semibold text-ink-900">Strength progress</h2>
-                    <p className="text-sm text-ink-500">Top lifts (lb)</p>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-ink-500">
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-500" /> Squat</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-accent-400" /> Bench</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Deadlift</span>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <StrengthChart data={strengthTrend} />
-                </div>
-              </div>
+          <div className="space-y-6">
+            {/* Weight trend */}
+            <div className="card p-6">
+              <h2 className="font-semibold text-ink-900">Body weight</h2>
+              <p className="text-sm text-ink-500">What {c.name.split(" ")[0]} has logged (lb)</p>
+              {weightChart.length >= 2 ? (
+                <div className="mt-4"><WeightChart data={weightChart} /></div>
+              ) : (
+                <p className="mt-4 rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-6 text-center text-sm text-ink-400">
+                  No weight entries yet — they appear here once the client logs weight.
+                </p>
+              )}
             </div>
-          ) : (
-            <EmptyState
-              icon={LineChart}
-              title="No progress logged yet"
-              description="Once this client logs workouts and check-ins, their weight and strength trends will appear here."
-            />
-          )
+
+            {/* Activity + nutrition summary */}
+            <div className="grid gap-6 sm:grid-cols-3">
+              <StatTile icon={Activity} label="Sessions logged" value={`${sessions.length}`} />
+              <StatTile icon={ClipboardCheck} label="Check-ins" value={`${clientCheckins.length}`} />
+              <StatTile icon={Apple} label="Water today" value={nutrition ? `${nutrition.water} glasses` : "—"} />
+            </div>
+
+            {/* Check-ins from the member */}
+            <div className="card p-6">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-brand-400" />
+                <h2 className="font-semibold text-ink-900">Check-ins</h2>
+                <span className="badge bg-ink-100 text-ink-600">{clientCheckins.length}</span>
+              </div>
+              {clientCheckins.length === 0 ? (
+                <p className="mt-4 rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-6 text-center text-sm text-ink-400">
+                  No check-ins yet — they show here when {c.name.split(" ")[0]} submits one.
+                </p>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {clientCheckins.slice(0, 8).map((ci) => (
+                    <div key={ci.id} className="rounded-xl border border-ink-100 p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-ink-900">
+                          {new Date(ci.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                        <span className="badge bg-accent-500/15 text-accent-400">Submitted</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
+                        {Object.entries(ci.answers).map(([k, v]) =>
+                          v === "" || v === undefined ? null : (
+                            <span key={k}><span className="text-ink-400">{k}:</span> {String(v)}</span>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {tab === "Photos" && (

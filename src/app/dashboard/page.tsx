@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
-import { useApp } from "@/lib/store";
+import { useApp, useMyClients } from "@/lib/store";
 
 // Appointments use day 0 = Monday; map JS getDay() (0 = Sun) onto that.
 function todayIndex() {
@@ -18,6 +18,7 @@ function todayIndex() {
 
 export default function DashboardPage() {
   const app = useApp();
+  const myClients = useMyClients();
 
   if (!app.hydrated) {
     return (
@@ -30,16 +31,17 @@ export default function DashboardPage() {
   const firstName = (app.settings.trainerName?.trim() || "Coach").split(" ")[0];
   const business = app.settings.businessName?.trim() || "your gym";
 
-  const clientCount = app.clients.length;
+  const clientCount = myClients.length;
   const avgAdherence =
     clientCount > 0
-      ? Math.round(app.clients.reduce((s, c) => s + (c.adherence ?? 0), 0) / clientCount)
+      ? Math.round(myClients.reduce((s, c) => s + (c.adherence ?? 0), 0) / clientCount)
       : 0;
 
-  const todays = app.appointments.filter((a) => a.day === todayIndex());
-  const atRisk = app.clients.filter((c) => c.adherence < 60 || c.status === "inactive");
-  const recent = app.clients.filter((c) => c.status === "active").slice(0, 5);
-  const getClient = (id: string) => app.clients.find((c) => c.id === id);
+  const myIds = new Set(myClients.map((c) => c.id));
+  const todays = app.appointments.filter((a) => a.day === todayIndex() && (!a.clientId || myIds.has(a.clientId)));
+  const atRisk = myClients.filter((c) => c.adherence < 60 || c.status === "inactive");
+  const recent = myClients.filter((c) => c.status === "active").slice(0, 5);
+  const getClient = (id: string) => myClients.find((c) => c.id === id);
 
   return (
     <>

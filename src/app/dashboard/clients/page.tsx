@@ -12,7 +12,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { ShareInvite } from "@/components/ui/ShareInvite";
-import { useApp } from "@/lib/store";
+import { useApp, useMyClients } from "@/lib/store";
 import { type Client, type ClientStatus } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +53,8 @@ function Loading() {
 }
 
 export default function ClientsPage() {
-  const { clients, addClient, hydrated, settings } = useApp();
+  const { addClient, hydrated, settings, session } = useApp();
+  const clients = useMyClients();
   const searchParams = useSearchParams();
 
   const [query, setQuery] = useState("");
@@ -122,6 +123,8 @@ export default function ClientsPage() {
       status: form.status,
       program: form.program.trim() || "Unassigned",
       tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+      // A coach's new clients are assigned to them; owner/admin leave unassigned.
+      ...(session?.role === "coach" ? { coachEmail: session.email, coachName: session.name } : {}),
     });
 
     if (form.invite && email) {

@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { EmptyState, Field } from "@/components/ui/Modal";
-import { useApp } from "@/lib/store";
+import { useApp, useMyClients } from "@/lib/store";
 import { askAI, aiConfigured } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +94,7 @@ function localAnalysis(exercise: string, faults: string[], notes: string): strin
 
 export default function FormCheckPage() {
   const app = useApp();
+  const myClients = useMyClients();
 
   const [clientId, setClientId] = useState<string>("");
   const [exercise, setExercise] = useState<string>(DEFAULT_LIFTS[0]);
@@ -106,7 +107,7 @@ export default function FormCheckPage() {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [error, setError] = useState<string>("");
 
-  const activeClientId = clientId || app.clients[0]?.id || "";
+  const activeClientId = clientId || myClients[0]?.id || "";
   // Form-check reviews persist in the shared workspace, keyed by client.
   const reviews = app.formReviews[activeClientId] ?? [];
 
@@ -127,7 +128,7 @@ export default function FormCheckPage() {
     );
   }
 
-  if (app.clients.length === 0) {
+  if (myClients.length === 0) {
     return (
       <>
         <PageHeader title="Form Check" subtitle="Review client technique and flag weaknesses" />
@@ -229,7 +230,7 @@ export default function FormCheckPage() {
     app.deleteFormReview(activeClientId, id);
   }
 
-  const clientName = app.clients.find((c) => c.id === activeClientId)?.name ?? "Client";
+  const clientName = myClients.find((c) => c.id === activeClientId)?.name ?? "Client";
 
   return (
     <>
@@ -261,7 +262,7 @@ export default function FormCheckPage() {
                     setVideoName("");
                   }}
                 >
-                  {app.clients.map((c) => (
+                  {myClients.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>

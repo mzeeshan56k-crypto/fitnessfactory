@@ -7,13 +7,6 @@ import { useApp, useCurrentClient } from "@/lib/store";
 import { EmptyState } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 
-const coachReplies = [
-  "Love to hear it — keep that momentum going! 💪",
-  "Great question. Let's review it at your next check-in, but you're on the right track.",
-  "Proud of your consistency. Rest up and hydrate today!",
-  "Awesome update. I'll tweak next week's plan to keep pushing you forward.",
-];
-
 export default function ClientMessagesPage() {
   const app = useApp();
   const member = useCurrentClient();
@@ -25,6 +18,7 @@ export default function ClientMessagesPage() {
     ? app.conversations.find((c) => c.clientId === member.id)
     : undefined;
   const messages = conversation?.messages ?? [];
+  const coachName = member?.coachName?.trim() || app.settings.trainerName?.trim() || "";
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -53,14 +47,9 @@ export default function ClientMessagesPage() {
     const text = draft.trim();
     if (!text) return;
 
+    // Real chat: the message goes to the trainer, who replies for real.
     app.sendMessage(member.id, text, true);
     setDraft("");
-
-    const reply = coachReplies[Math.floor(Math.random() * coachReplies.length)];
-    const memberId = member.id;
-    setTimeout(() => {
-      app.sendMessage(memberId, reply, false);
-    }, 1000);
   }
 
   return (
@@ -69,7 +58,7 @@ export default function ClientMessagesPage() {
       <section className="card flex items-center gap-4 p-4">
         <div className="relative">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white shadow-glow">
-            {(app.settings.trainerName?.trim() || "Coach")
+            {(coachName || "Coach")
               .split(" ")
               .map((p) => p[0])
               .filter(Boolean)
@@ -80,7 +69,7 @@ export default function ClientMessagesPage() {
           <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-accent-500" />
         </div>
         <div className="flex-1">
-          <h1 className="font-semibold text-ink-900">{app.settings.trainerName?.trim() || "Your Coach"}</h1>
+          <h1 className="font-semibold text-ink-900">{coachName || "Your Coach"}</h1>
           <p className="text-xs text-ink-500">
             {app.settings.businessName?.trim() || "Fitness Factory KC"} · Usually replies in a few hours
           </p>

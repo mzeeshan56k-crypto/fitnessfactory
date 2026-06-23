@@ -11,7 +11,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
 import { lightStyles, type Light } from "@/lib/platform";
 import type { Client } from "@/lib/data";
-import { useApp } from "@/lib/store";
+import { useApp, useMyClients } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 type Filter = "all" | "red" | "yellow" | "green";
@@ -89,12 +89,13 @@ function Loading() {
 
 export default function AuditingPage() {
   const app = useApp();
+  const myClients = useMyClients();
   const [filter, setFilter] = useState<Filter>("all");
   const [reviews, setReviews] = useState<Record<string, string>>({});
 
   if (!app.hydrated) return <Loading />;
 
-  if (app.clients.length === 0) {
+  if (myClients.length === 0) {
     return (
       <>
         <PageHeader
@@ -110,7 +111,7 @@ export default function AuditingPage() {
     );
   }
 
-  const derived = app.clients.map(derive);
+  const derived = myClients.map(derive);
 
   const counts = derived.reduce(
     (acc, d) => {

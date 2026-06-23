@@ -6,6 +6,7 @@ import {
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
   Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto, NutritionLog,
+  WeightEntry,
 } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
@@ -87,6 +88,8 @@ export interface DB {
   photos: Record<string, ProgressPhoto[]>;
   // Members' nutrition diaries, keyed by client id.
   nutritionLogs: Record<string, NutritionLog>;
+  // Bodyweight history, keyed by client id.
+  weightLogs: Record<string, WeightEntry[]>;
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -104,7 +107,7 @@ const emptyDB: DB = {
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
   formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
-  nutritionLogs: {},
+  nutritionLogs: {}, weightLogs: {},
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -178,6 +181,12 @@ interface AppContextValue extends DB {
   removePhoto: (clientId: string, id: string) => void;
   // member nutrition diary
   setNutritionLog: (clientId: string, log: NutritionLog) => void;
+  // member bodyweight log
+  logWeight: (clientId: string, weight: number) => void;
+  // trainer assignment (admin)
+  assignCoach: (clientId: string, coachEmail: string, coachName: string) => void;
+  // pull the latest workspace from the server
+  refresh: () => void;
   // users (admin)
   addUser: (u: Partial<PlatformUser>) => void;
   updateUser: (id: string, patch: Partial<PlatformUser>) => void;
@@ -197,9 +206,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const lastSaved = useRef<string | null>(null);
   const loaded = useRef(false);
   const sessionRef = useRef<SessionUser | null>(null);
+  const dbRef = useRef<DB>(db);
+  useEffect(() => {
+    dbRef.current = db;
+  }, [db]);
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
+
+  // Pull the latest workspace from the server, without clobbering unsaved
+  // local edits (so coach/member see each other's updates live).
+  const refresh = useCallback(async () => {
+    const sess = sessionRef.current;
+    if (!loaded.current || !sess) return;
+    // Staff bulk-save: skip if there are pending unsaved local changes.
+    if (sess.role !== "member" && JSON.stringify(dbRef.current) !== lastSaved.current) return;
+    try {
+      const res = await fetch("/api/workspace");
+      if (!res.ok) return;
+      const data = await res.json();
+      const merged: DB = data.workspace ? { ...emptyDB, ...data.workspace } : emptyDB;
+      const snapshot = JSON.stringify(merged);
+      if (snapshot !== JSON.stringify(dbRef.current)) {
+        setDb(merged);
+        lastSaved.current = snapshot;
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Live sync: poll periodically and whenever the tab regains focus.
+  useEffect(() => {
+    if (!hydrated || !session) return;
+    const id = window.setInterval(refresh, 15000);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [hydrated, session, refresh]);
 
   // Load the workspace + session from the server on boot.
   useEffect(() => {
@@ -302,6 +351,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       goalWeight: c.goalWeight ?? 0, adherence: c.adherence ?? 0,
       joinedAt: new Date().toISOString().slice(0, 10), phone: c.phone ?? "",
       tags: c.tags ?? [],
+      coachEmail: c.coachEmail, coachName: c.coachName,
     };
     setDb((d) => ({
       ...d,
@@ -580,6 +630,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /* ----- member bodyweight log ----- */
+  const logWeight = useCallback((clientId: string, weight: number) => {
+    const entry: WeightEntry = { date: new Date().toISOString(), weight };
+    setDb((d) => ({
+      ...d,
+      weightLogs: { ...d.weightLogs, [clientId]: [entry, ...(d.weightLogs[clientId] ?? [])] },
+      // Keep the client's headline current weight in sync.
+      clients: d.clients.map((c) => (c.id === clientId ? { ...c, currentWeight: weight } : c)),
+    }));
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "weight", weight }),
+      }).catch(() => {});
+    }
+  }, []);
+
+  /* ----- trainer assignment (admin) ----- */
+  const assignCoach = useCallback((clientId: string, coachEmail: string, coachName: string) =>
+    setDb((d) => ({
+      ...d,
+      clients: d.clients.map((c) =>
+        c.id === clientId ? { ...c, coachEmail: coachEmail || undefined, coachName: coachName || undefined } : c,
+      ),
+    })), []);
+
   /* ----- member nutrition diary ----- */
   const setNutritionLog = useCallback((clientId: string, log: NutritionLog) => {
     setDb((d) => ({ ...d, nutritionLogs: { ...d.nutritionLogs, [clientId]: log } }));
@@ -634,7 +711,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
-    addPhoto, removePhoto, setNutritionLog,
+    addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser,
     addBroadcast,
     updateSettings,
@@ -646,7 +723,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
-    addPhoto, removePhoto, setNutritionLog,
+    addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);
 
@@ -657,6 +734,19 @@ export function useApp() {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error("useApp must be used within AppProvider");
   return ctx;
+}
+
+/**
+ * The clients the signed-in staff member should see: owner/admin see everyone;
+ * a coach sees only clients assigned to them.
+ */
+export function useMyClients() {
+  const { clients, session } = useApp();
+  if (session?.role === "coach") {
+    const me = session.email.toLowerCase();
+    return clients.filter((c) => (c.coachEmail ?? "").toLowerCase() === me);
+  }
+  return clients;
 }
 
 /** Convenience: the client currently being viewed in the client portal. */

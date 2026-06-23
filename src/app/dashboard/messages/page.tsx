@@ -6,7 +6,7 @@ import { Send, ExternalLink, Search, MessageSquare, Loader2 } from "lucide-react
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
-import { useApp } from "@/lib/store";
+import { useApp, useMyClients } from "@/lib/store";
 import type { Conversation, Message } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -25,22 +25,16 @@ function Loading() {
 
 export default function MessagesPage() {
   const app = useApp();
+  const myClients = useMyClients();
   const [activeId, setActiveId] = useState<string>("");
   const [draft, setDraft] = useState("");
 
-  // Build the left list: every conversation plus any client without one,
-  // so the trainer can start a chat with anyone.
+  // Build the left list: only my clients, plus any conversation for them.
   const list = useMemo(() => {
     if (!app.hydrated) return [] as { clientId: string; conversation?: Conversation }[];
     const byId = new Map(app.conversations.map((c) => [c.clientId, c]));
-    const withConvo = app.conversations
-      .filter((c) => app.clients.some((cl) => cl.id === c.clientId))
-      .map((c) => ({ clientId: c.clientId, conversation: c }));
-    const withoutConvo = app.clients
-      .filter((cl) => !byId.has(cl.id))
-      .map((cl) => ({ clientId: cl.id, conversation: undefined }));
-    return [...withConvo, ...withoutConvo];
-  }, [app.hydrated, app.conversations, app.clients]);
+    return myClients.map((cl) => ({ clientId: cl.id, conversation: byId.get(cl.id) }));
+  }, [app.hydrated, app.conversations, myClients]);
 
   // Default-select the first entry once hydrated.
   useEffect(() => {
@@ -50,7 +44,7 @@ export default function MessagesPage() {
 
   if (!app.hydrated) return <Loading />;
 
-  const activeClient = activeId ? app.clients.find((c) => c.id === activeId) : undefined;
+  const activeClient = activeId ? myClients.find((c) => c.id === activeId) : undefined;
   const activeConvo = activeId
     ? app.conversations.find((c) => c.clientId === activeId)
     : undefined;
@@ -66,7 +60,7 @@ export default function MessagesPage() {
     <>
       <PageHeader title="Messages" subtitle="Stay in touch with your clients" />
 
-      {app.clients.length === 0 ? (
+      {myClients.length === 0 ? (
         <EmptyState
           icon={MessageSquare}
           title="No clients yet"
@@ -84,7 +78,7 @@ export default function MessagesPage() {
             </div>
             <div className="flex-1 overflow-y-auto scroll-thin">
               {list.map(({ clientId, conversation }) => {
-                const client = app.clients.find((c) => c.id === clientId);
+                const client = myClients.find((c) => c.id === clientId);
                 if (!client) return null;
                 const last = lastMessage(conversation);
                 const isActive = clientId === activeId;
