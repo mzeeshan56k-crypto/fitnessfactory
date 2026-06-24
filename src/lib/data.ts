@@ -36,6 +36,7 @@ export interface Exercise {
   videoThumb: string;
   video?: string;
   pattern?: string; // movement pattern for the animated graphic
+  instructions?: string; // step-by-step written coaching instructions (one step per line)
 }
 
 export interface WorkoutSet {
@@ -59,6 +60,9 @@ export interface Workout {
   durationMin: number;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
   exercises: WorkoutExercise[];
+  format?: string; // e.g. "Standard", "Interval workout", "Circuit"
+  instructions?: string; // workout-level instructions shown before the exercises
+  equipment?: string[]; // optional explicit equipment list (otherwise derived from exercises)
 }
 
 export interface Program {

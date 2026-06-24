@@ -138,6 +138,7 @@ interface AppContextValue extends DB {
   setCurrentClient: (id: string | null) => void;
   // exercises
   addExercise: (e: Partial<Exercise>) => Exercise;
+  updateExercise: (id: string, patch: Partial<Exercise>) => void;
   removeExercise: (id: string) => void;
   // workouts
   addWorkout: (w: Partial<Workout>) => Workout;
@@ -378,11 +379,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: uid("e"), name: e.name ?? "New Exercise", muscle: e.muscle ?? "Full body",
       equipment: e.equipment ?? "Bodyweight", level: e.level ?? "Beginner",
       type: e.type ?? "Strength", videoThumb: e.videoThumb ?? "demo",
-      video: e.video,
+      video: e.video, instructions: e.instructions,
     };
     setDb((d) => ({ ...d, exercises: [ex, ...d.exercises] }));
     return ex;
   }, []);
+  const updateExercise = useCallback((id: string, patch: Partial<Exercise>) =>
+    setDb((d) => ({ ...d, exercises: d.exercises.map((e) => (e.id === id ? { ...e, ...patch } : e)) })), []);
   const removeExercise = useCallback((id: string) =>
     setDb((d) => ({ ...d, exercises: d.exercises.filter((e) => e.id !== id) })), []);
 
@@ -699,7 +702,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     set, loadStarterContent, resetAll,
     addForm, updateForm, removeForm,
     addClient, updateClient, removeClient, setCurrentClient,
-    addExercise, removeExercise,
+    addExercise, updateExercise, removeExercise,
     addWorkout, updateWorkout, removeWorkout,
     addProgram, removeProgram,
     addMealPlan, removeMealPlan,
@@ -718,7 +721,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }), [
     db, hydrated, session, signOut, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
-    setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
+    setCurrentClient, addExercise, updateExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,

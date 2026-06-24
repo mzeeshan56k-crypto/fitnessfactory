@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ChevronLeft, Clock, Flame, Check, CheckCircle2, Dumbbell, PartyPopper,
   Timer, TrendingUp, AlertTriangle, Activity, X, Play, UserPlus,
+  Wrench, ListOrdered, Info, ChevronDown,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { EmptyState } from "@/components/ui/Modal";
@@ -84,6 +85,19 @@ export default function Page({ params }: { params: { id: string } }) {
 function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Workout; clientId: string }) {
   const w = workout;
   const { exercises: exerciseLibrary, completeWorkout } = useApp();
+
+  const libById = (id: string) => exerciseLibrary.find((e) => e.id === id);
+
+  // Equipment: explicit list if set, otherwise derived from the exercises.
+  const equipment: string[] = w.equipment?.length
+    ? w.equipment
+    : Array.from(
+        new Set(
+          w.exercises
+            .map((ex) => libById(ex.exerciseId)?.equipment)
+            .filter((e): e is string => Boolean(e)),
+        ),
+      );
 
   // Build a stable default log map seeded from the prescribed sets.
   const defaultLog = useMemo<LogMap>(() => {
@@ -174,7 +188,12 @@ function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Wo
 
       {/* Hero */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 to-ink-50 p-6 text-white shadow-glow">
-        <span className="badge bg-white/15 text-white">{w.category}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="badge bg-white/15 text-white">{w.category}</span>
+          {w.format && w.format !== "Standard" && (
+            <span className="badge bg-white/15 text-white">{w.format}</span>
+          )}
+        </div>
         <h1 className="mt-2 text-2xl font-bold">{w.name}</h1>
         <div className="mt-1 flex items-center gap-3 text-sm text-brand-100">
           <span className="flex items-center gap-1">
@@ -184,6 +203,14 @@ function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Wo
             <Flame className="h-4 w-4" /> {w.difficulty}
           </span>
         </div>
+        {equipment.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-brand-100">
+            <Wrench className="h-3.5 w-3.5" />
+            {equipment.map((eq) => (
+              <span key={eq} className="rounded-full bg-white/15 px-2 py-0.5">{eq}</span>
+            ))}
+          </div>
+        )}
 
         {/* Progress indicator */}
         <div className="mt-5">
@@ -199,6 +226,20 @@ function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Wo
           </div>
         </div>
       </section>
+
+      {/* Workout instructions */}
+      {w.instructions && (
+        <section className="card p-5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">
+            <Info className="h-3.5 w-3.5" /> Instructions
+          </div>
+          <div className="mt-2 space-y-1.5 text-sm text-ink-600">
+            {w.instructions.split("\n").filter(Boolean).map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Exercises */}
       <section className="space-y-4 pb-4">
@@ -253,6 +294,27 @@ function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Wo
                   {ex.notes}
                 </p>
               )}
+
+              {/* How to perform — written step-by-step instructions */}
+              {(() => {
+                const steps = (libById(ex.exerciseId)?.instructions ?? "")
+                  .split("\n").map((s) => s.trim()).filter(Boolean);
+                if (steps.length === 0) return null;
+                return (
+                  <details className="group/howto mt-3 rounded-lg border border-ink-100 bg-ink-50/60">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-ink-700">
+                      <ListOrdered className="h-3.5 w-3.5 text-brand-500" />
+                      How to perform
+                      <ChevronDown className="ml-auto h-4 w-4 text-ink-400 transition group-open/howto:rotate-180" />
+                    </summary>
+                    <ol className="list-decimal space-y-1 px-3 pb-3 pl-8 text-xs text-ink-600 marker:text-ink-400">
+                      {steps.map((step, si) => (
+                        <li key={si}>{step}</li>
+                      ))}
+                    </ol>
+                  </details>
+                );
+              })()}
 
               {/* Rest timer */}
               <RestTimer seconds={90} />
