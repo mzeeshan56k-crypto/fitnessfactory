@@ -94,7 +94,7 @@ export const seedExercises: Exercise[] = [
 /*  Workouts — every exerciseId below references an id defined above.          */
 /* -------------------------------------------------------------------------- */
 
-export const seedWorkouts: Workout[] = [
+const rawSeedWorkouts: Workout[] = [
   // ===== Full body / general fitness =====
   {
     id: "wk_full_body_a", name: "Full Body A", category: "Full Body", durationMin: 50, difficulty: "Beginner",
@@ -290,6 +290,44 @@ export const seedWorkouts: Workout[] = [
     ],
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/*  Decorate the raw workouts with library metadata: a collection tag (so the  */
+/*  Master Libraries tag folders are populated), an author, a staggered        */
+/*  created date and a friendly description.                                    */
+/* -------------------------------------------------------------------------- */
+
+const SEED_AUTHOR = "Fitness Factory KC";
+
+const collectionTag: Record<string, string> = {
+  "Full Body": "Full Body",
+  Hypertrophy: "Push / Pull / Legs",
+  Strength: "5×5 Strength",
+  Conditioning: "Fat Loss",
+  Endurance: "Conditioning",
+  Core: "Core & Abs",
+  Mobility: "Recovery",
+};
+
+const collectionDesc: Record<string, string> = {
+  "Full Body": "Hit every major muscle group in one balanced session — perfect for 3-day-a-week training.",
+  Hypertrophy: "Higher-volume training built to add muscle, organised as a push / pull / legs split.",
+  Strength: "Low-rep compound work to build raw strength on the big lifts.",
+  Conditioning: "Fast-paced circuit work to spike the heart rate and burn calories.",
+  Endurance: "Steady, repeatable efforts to build a bigger aerobic engine.",
+  Core: "Targeted midline work to build a strong, stable core.",
+  Mobility: "Low-impact flows and stretches to move better and recover faster.",
+};
+
+export const seedWorkouts: Workout[] = rawSeedWorkouts.map((w, i) => ({
+  ...w,
+  createdBy: SEED_AUTHOR,
+  // Stagger created dates so "Newest first" sorts sensibly (newest = first in list).
+  createdAt: new Date(2025, 4, 1 - i * 6).toISOString(),
+  updatedAt: new Date(2025, 4, 1 - i * 6).toISOString(),
+  tags: collectionTag[w.category] ? [collectionTag[w.category]] : [],
+  description: collectionDesc[w.category] ?? `A ${w.difficulty.toLowerCase()} ${w.category.toLowerCase()} session.`,
+}));
 
 /* -------------------------------------------------------------------------- */
 /*  Program templates                                                          */

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Users, Dumbbell, Apple, CalendarDays,
+  LayoutDashboard, Users, Apple, CalendarDays,
   MessageSquare, LineChart, Sparkles, Settings, LogOut,
   TrafficCone, KanbanSquare, ClipboardList, FileSpreadsheet, UsersRound, Megaphone,
-  ScanLine, HeartPulse,
+  ScanLine, HeartPulse, LibraryBig,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { useApp } from "@/lib/store";
@@ -16,7 +16,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/clients", label: "Clients", icon: Users },
   { href: "/dashboard/auditing", label: "Auditing", icon: TrafficCone },
-  { href: "/dashboard/workouts", label: "Training", icon: Dumbbell },
+  { href: "/dashboard/workouts", label: "Master Libraries", icon: LibraryBig },
   { href: "/dashboard/form-check", label: "Form Check", icon: ScanLine },
   { href: "/dashboard/program-builder", label: "Program Builder", icon: ClipboardList },
   { href: "/dashboard/nutrition", label: "Nutrition", icon: Apple },

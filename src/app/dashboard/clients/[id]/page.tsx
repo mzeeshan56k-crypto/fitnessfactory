@@ -47,7 +47,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const {
     clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings,
     workouts: libWorkouts, programs, mealPlans, clientPlans, completions, photos,
-    weightLogs, checkins, nutritionLogs, session, assignCoach,
+    weightLogs, checkins, nutritionLogs, session, assignCoach, notify,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
   } = useApp();
   const [coaches, setCoaches] = useState<{ email: string; name: string; role: string }[]>([]);
@@ -452,7 +452,11 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <select
                   className="input mt-4"
                   value={plan.programId ?? ""}
-                  onChange={(e) => setClientProgram(c.id, e.target.value)}
+                  onChange={(e) => {
+                    setClientProgram(c.id, e.target.value);
+                    const p = programs.find((pp) => pp.id === e.target.value);
+                    notify(p ? `Assigned “${p.name}” to ${c.name.split(" ")[0]}` : "Program unassigned", p ? "success" : "info");
+                  }}
                 >
                   <option value="">Unassigned</option>
                   {programs.map((p) => (
@@ -475,7 +479,11 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <select
                   className="input mt-4"
                   value={plan.mealPlanId ?? ""}
-                  onChange={(e) => setClientMealPlan(c.id, e.target.value)}
+                  onChange={(e) => {
+                    setClientMealPlan(c.id, e.target.value);
+                    const m = mealPlans.find((mm) => mm.id === e.target.value);
+                    notify(m ? `Assigned “${m.name}” to ${c.name.split(" ")[0]}` : "Nutrition plan unassigned", m ? "success" : "info");
+                  }}
                 >
                   <option value="">Unassigned</option>
                   {mealPlans.map((m) => (
@@ -497,7 +505,12 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                   <select
                     className="input"
                     value=""
-                    onChange={(e) => { if (e.target.value) toggleAssignedWorkout(c.id, e.target.value); }}
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const w = libWorkouts.find((ww) => ww.id === e.target.value);
+                      toggleAssignedWorkout(c.id, e.target.value);
+                      notify(`Assigned “${w?.name ?? "workout"}” to ${c.name.split(" ")[0]}`);
+                    }}
                     disabled={unassignedWorkouts.length === 0}
                   >
                     <option value="">
@@ -534,7 +547,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-semibold text-ink-900">{w.name}</h3>
                         <button
-                          onClick={() => toggleAssignedWorkout(c.id, w.id)}
+                          onClick={() => { toggleAssignedWorkout(c.id, w.id); notify(`Removed “${w.name}” from ${c.name.split(" ")[0]}`, "info"); }}
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-400 transition hover:bg-rose-500/15 hover:text-rose-400"
                           aria-label={`Remove ${w.name}`}
                         >

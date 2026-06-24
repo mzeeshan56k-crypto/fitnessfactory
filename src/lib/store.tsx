@@ -13,6 +13,7 @@ import type {
 } from "@/lib/platform";
 import type { SessionUser } from "@/lib/auth/session";
 import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms } from "@/lib/seed-content";
+import { Toaster } from "@/components/ui/Toaster";
 
 export function uid(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -119,10 +120,20 @@ const emptyDB: DB = {
   seeded: false,
 };
 
+export interface Toast {
+  id: string;
+  message: string;
+  tone: "success" | "info" | "error";
+}
+
 interface AppContextValue extends DB {
   hydrated: boolean;
   session: SessionUser | null;
   signOut: () => Promise<void>;
+  // transient toast notifications (instant feedback for actions)
+  toasts: Toast[];
+  notify: (message: string, tone?: Toast["tone"]) => void;
+  dismissToast: (id: string) => void;
   // generic
   set: (patch: Partial<DB>) => void;
   loadStarterContent: () => void;
@@ -143,6 +154,7 @@ interface AppContextValue extends DB {
   addWorkout: (w: Partial<Workout>) => Workout;
   updateWorkout: (id: string, patch: Partial<Workout>) => void;
   removeWorkout: (id: string) => void;
+  duplicateWorkout: (id: string) => Workout | null;
   // programs
   addProgram: (p: Partial<Program>) => Program;
   removeProgram: (id: string) => void;
@@ -172,6 +184,7 @@ interface AppContextValue extends DB {
   setRecoveryNote: (clientId: string, text: string) => void;
   // assignment (coach → client)
   toggleAssignedWorkout: (clientId: string, workoutId: string) => void;
+  assignWorkoutToClients: (workoutIds: string[], clientIds: string[]) => void;
   setClientProgram: (clientId: string, programId: string) => void;
   setClientMealPlan: (clientId: string, mealPlanId: string) => void;
   // member logs a completed session
@@ -203,6 +216,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [db, setDb] = useState<DB>(emptyDB);
   const [hydrated, setHydrated] = useState(false);
   const [session, setSession] = useState<SessionUser | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const lastSaved = useRef<string | null>(null);
   const loaded = useRef(false);
   const sessionRef = useRef<SessionUser | null>(null);
@@ -237,9 +251,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Live sync: poll periodically and whenever the tab regains focus.
+  // Members poll quickly so a coach's assignment shows up almost instantly;
+  // staff poll a little slower (they're the writers).
   useEffect(() => {
     if (!hydrated || !session) return;
-    const id = window.setInterval(refresh, 15000);
+    const interval = session.role === "member" ? 5000 : 10000;
+    const id = window.setInterval(refresh, interval);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -305,6 +322,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
     window.location.href = "/login";
+  }, []);
+
+  /* ----- toasts (transient feedback) ----- */
+  const dismissToast = useCallback((id: string) => {
+    setToasts((t) => t.filter((x) => x.id !== id));
+  }, []);
+  const notify = useCallback((message: string, tone: Toast["tone"] = "success") => {
+    const id = uid("toast");
+    setToasts((t) => [...t, { id, message, tone }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
   }, []);
 
   const set = useCallback((patch: Partial<DB>) => setDb((d) => ({ ...d, ...patch })), []);
@@ -388,18 +415,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   /* ----- workouts ----- */
   const addWorkout = useCallback((w: Partial<Workout>): Workout => {
+    const now = new Date().toISOString();
     const workout: Workout = {
       id: uid("w"), name: w.name ?? "New Workout", category: w.category ?? "Strength",
       durationMin: w.durationMin ?? 45, difficulty: w.difficulty ?? "Beginner",
       exercises: w.exercises ?? [],
+      tags: w.tags ?? [],
+      description: w.description,
+      instructions: w.instructions,
+      video: w.video,
+      createdBy: w.createdBy ?? dbRef.current.settings.businessName,
+      createdAt: w.createdAt ?? now,
+      updatedAt: w.updatedAt ?? now,
     };
     setDb((d) => ({ ...d, workouts: [workout, ...d.workouts] }));
     return workout;
   }, []);
   const updateWorkout = useCallback((id: string, patch: Partial<Workout>) =>
-    setDb((d) => ({ ...d, workouts: d.workouts.map((w) => (w.id === id ? { ...w, ...patch } : w)) })), []);
+    setDb((d) => ({
+      ...d,
+      workouts: d.workouts.map((w) =>
+        w.id === id ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w,
+      ),
+    })), []);
   const removeWorkout = useCallback((id: string) =>
-    setDb((d) => ({ ...d, workouts: d.workouts.filter((w) => w.id !== id) })), []);
+    setDb((d) => ({
+      ...d,
+      workouts: d.workouts.filter((w) => w.id !== id),
+      // Pull the deleted workout out of every client's assigned plan too.
+      clientPlans: Object.fromEntries(
+        Object.entries(d.clientPlans).map(([cid, plan]) => [
+          cid, { ...plan, workoutIds: plan.workoutIds.filter((wid) => wid !== id) },
+        ]),
+      ),
+    })), []);
+  // Clone a workout into a new "(copy)" entry — Trainerize's Duplicate action.
+  const duplicateWorkout = useCallback((id: string): Workout | null => {
+    const src = dbRef.current.workouts.find((w) => w.id === id);
+    if (!src) return null;
+    const now = new Date().toISOString();
+    const copy: Workout = {
+      ...src,
+      id: uid("w"),
+      name: `${src.name} (copy)`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setDb((d) => ({ ...d, workouts: [copy, ...d.workouts] }));
+    return copy;
+  }, []);
 
   /* ----- programs ----- */
   const addProgram = useCallback((p: Partial<Program>): Program => {
@@ -558,6 +622,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDb((d) => ({ ...d, recoveryNotes: { ...d.recoveryNotes, [clientId]: text } })), []);
 
   /* ----- assignment (coach → client) ----- */
+  const stamp = () => new Date().toISOString();
   const toggleAssignedWorkout = useCallback((clientId: string, workoutId: string) =>
     setDb((d) => {
       const plan = d.clientPlans[clientId] ?? { workoutIds: [] };
@@ -565,7 +630,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const workoutIds = has
         ? plan.workoutIds.filter((id) => id !== workoutId)
         : [...plan.workoutIds, workoutId];
-      return { ...d, clientPlans: { ...d.clientPlans, [clientId]: { ...plan, workoutIds } } };
+      return { ...d, clientPlans: { ...d.clientPlans, [clientId]: { ...plan, workoutIds, updatedAt: stamp() } } };
+    }), []);
+  // Assign a set of workouts to several clients at once (Trainerize "Assign to clients").
+  const assignWorkoutToClients = useCallback((workoutIds: string[], clientIds: string[]) =>
+    setDb((d) => {
+      const clientPlans = { ...d.clientPlans };
+      for (const cid of clientIds) {
+        const plan = clientPlans[cid] ?? { workoutIds: [] };
+        const merged = Array.from(new Set([...plan.workoutIds, ...workoutIds]));
+        clientPlans[cid] = { ...plan, workoutIds: merged, updatedAt: stamp() };
+      }
+      return { ...d, clientPlans };
     }), []);
   const setClientProgram = useCallback((clientId: string, programId: string) =>
     setDb((d) => {
@@ -575,7 +651,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const workoutIds = program?.workoutIds?.length ? [...program.workoutIds] : current.workoutIds;
       return {
         ...d,
-        clientPlans: { ...d.clientPlans, [clientId]: { ...current, programId, workoutIds } },
+        clientPlans: { ...d.clientPlans, [clientId]: { ...current, programId, workoutIds, updatedAt: stamp() } },
         // Keep the client's display program name in sync.
         clients: program ? d.clients.map((c) => (c.id === clientId ? { ...c, program: program.name } : c)) : d.clients,
       };
@@ -583,7 +659,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setClientMealPlan = useCallback((clientId: string, mealPlanId: string) =>
     setDb((d) => ({
       ...d,
-      clientPlans: { ...d.clientPlans, [clientId]: { ...(d.clientPlans[clientId] ?? { workoutIds: [] }), mealPlanId } },
+      clientPlans: { ...d.clientPlans, [clientId]: { ...(d.clientPlans[clientId] ?? { workoutIds: [] }), mealPlanId, updatedAt: stamp() } },
     })), []);
 
   const completeWorkout = useCallback((clientId: string, summary: Omit<WorkoutCompletion, "id" | "date">) => {
@@ -696,11 +772,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppContextValue>(() => ({
     ...db, hydrated, session, signOut,
+    toasts, notify, dismissToast,
     set, loadStarterContent, resetAll,
     addForm, updateForm, removeForm,
     addClient, updateClient, removeClient, setCurrentClient,
     addExercise, removeExercise,
-    addWorkout, updateWorkout, removeWorkout,
+    addWorkout, updateWorkout, removeWorkout, duplicateWorkout,
     addProgram, removeProgram,
     addMealPlan, removeMealPlan,
     sendMessage,
@@ -710,24 +787,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
+    toggleAssignedWorkout, assignWorkoutToClients, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser,
     addBroadcast,
     updateSettings,
   }), [
-    db, hydrated, session, signOut, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
+    db, hydrated, session, signOut, toasts, notify, dismissToast,
+    set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
-    setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
+    setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout, duplicateWorkout,
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
+    toggleAssignedWorkout, assignWorkoutToClients, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+      <Toaster toasts={toasts} onDismiss={dismissToast} />
+    </AppContext.Provider>
+  );
 }
 
 export function useApp() {

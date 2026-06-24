@@ -59,6 +59,14 @@ export interface Workout {
   durationMin: number;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
   exercises: WorkoutExercise[];
+  // Library metadata (Trainerize-style master workouts).
+  tags?: string[];
+  description?: string;
+  instructions?: string;
+  video?: string; // a "video workout" — plays instead of a set list
+  createdBy?: string;
+  createdAt?: string; // ISO date
+  updatedAt?: string; // ISO date
 }
 
 export interface Program {
@@ -136,6 +144,7 @@ export interface ClientPlan {
   workoutIds: string[];
   programId?: string;
   mealPlanId?: string;
+  updatedAt?: string; // ISO date — when the coach last changed this plan
 }
 
 // A logged training session the member completed (coach reviews these).

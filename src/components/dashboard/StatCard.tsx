@@ -5,12 +5,14 @@ export function StatCard({
   label,
   value,
   delta,
+  hint,
   icon: Icon,
   positive = true,
 }: {
   label: string;
   value: string;
   delta?: string;
+  hint?: string;
   icon: React.ComponentType<{ className?: string }>;
   positive?: boolean;
 }) {
@@ -34,6 +36,7 @@ export function StatCard({
       </div>
       <div className="mt-4 text-2xl font-bold text-ink-900">{value}</div>
       <div className="mt-1 text-sm text-ink-500">{label}</div>
+      {hint && <div className="mt-0.5 text-xs text-ink-400">{hint}</div>}
     </div>
   );
 }

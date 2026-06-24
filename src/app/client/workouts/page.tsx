@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import {
   Dumbbell, Clock, ListChecks, ChevronRight, CheckCircle2, CalendarDays, UserPlus,
@@ -17,6 +18,10 @@ const difficultyTint: Record<string, string> = {
 export default function ClientWorkoutsPage() {
   const app = useApp();
   const c = useCurrentClient();
+
+  // Refresh the assigned plan on open for near-instant coach → client sync.
+  const { refresh } = app;
+  useEffect(() => { refresh(); }, [refresh]);
 
   if (!app.hydrated)
     return (

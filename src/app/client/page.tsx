@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import {
   Dumbbell, Flame, Target, TrendingDown, ChevronRight, CheckCircle2,
@@ -17,6 +18,11 @@ const habitIcons: Record<string, React.ComponentType<{ className?: string }>> = 
 export default function ClientTodayPage() {
   const app = useApp();
   const c = useCurrentClient();
+
+  // Pull the freshest plan the moment the member lands here, so newly
+  // assigned workouts appear without waiting for the next poll.
+  const { refresh } = app;
+  useEffect(() => { refresh(); }, [refresh]);
 
   if (!app.hydrated)
     return (
