@@ -3,12 +3,14 @@
 import { useState } from "react";
 import {
   Plus, Dumbbell, GraduationCap, Clock, BookOpen, Pencil, Upload, Trash2, CheckCircle2,
+  ListOrdered, Search,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { useApp } from "@/lib/store";
 import { useLocalState } from "@/lib/useLocalState";
 import { courses as seedCourses, type Course } from "@/lib/platform";
+import type { Exercise } from "@/lib/data";
 
 const colorPresets = ["from-brand-500 to-brand-700", "from-accent-400 to-accent-600", "from-purple-500 to-indigo-600", "from-amber-400 to-orange-500"];
 
@@ -25,6 +27,27 @@ export default function LibraryPage() {
   const [category, setCategory] = useState("Training");
   const [lessons, setLessons] = useState("8");
   const [duration, setDuration] = useState("60");
+
+  // Exercise instructions viewer/editor
+  const [exEditing, setExEditing] = useState<Exercise | null>(null);
+  const [exInstr, setExInstr] = useState("");
+  const [exQuery, setExQuery] = useState("");
+
+  function openExercise(e: Exercise) {
+    setExEditing(e);
+    setExInstr(e.instructions ?? "");
+  }
+  function saveExercise() {
+    if (!exEditing) return;
+    app.updateExercise(exEditing.id, { instructions: exInstr.trim() || undefined });
+    setExEditing(null);
+  }
+
+  const filteredExercises = app.exercises.filter((e) => {
+    const q = exQuery.trim().toLowerCase();
+    return !q || e.name.toLowerCase().includes(q) || e.muscle.toLowerCase().includes(q);
+  });
+  const withInstructions = app.exercises.filter((e) => e.instructions).length;
 
   function openNew() {
     setEditing(null);
@@ -82,7 +105,7 @@ export default function LibraryPage() {
       />
 
       <section className="card p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/15 text-brand-400">
               <Dumbbell className="h-5 w-5" />
@@ -90,11 +113,12 @@ export default function LibraryPage() {
             <div>
               <h2 className="font-semibold text-ink-900">Exercise library</h2>
               <p className="text-sm text-ink-500">
-                {app.exercises.length} master exercise{app.exercises.length === 1 ? "" : "s"} synced from coaches
+                {app.exercises.length} master exercise{app.exercises.length === 1 ? "" : "s"} ·{" "}
+                <span className="text-accent-400">{withInstructions} with instructions</span>
               </p>
             </div>
           </div>
-          <span className="badge bg-ink-100 text-ink-700">Synced to all coaches</span>
+          <span className="badge bg-ink-100 text-ink-700">Synced to all coaches &amp; clients</span>
         </div>
 
         {app.exercises.length === 0 ? (
@@ -103,19 +127,50 @@ export default function LibraryPage() {
             or use Load starter content in Settings → Data.
           </p>
         ) : (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {app.exercises.slice(0, 12).map((e) => (
-              <div key={e.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-ink-50 text-ink-500">
-                  <Dumbbell className="h-4 w-4" />
-                </span>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-ink-900">{e.name}</div>
-                  <div className="text-xs text-ink-500">{e.muscle}{e.video ? " · video" : ""}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="relative mt-5 w-full sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+              <input
+                value={exQuery}
+                onChange={(e) => setExQuery(e.target.value)}
+                placeholder="Search exercises…"
+                className="input pl-9"
+              />
+            </div>
+            <div className="mt-4 grid max-h-[28rem] gap-3 overflow-y-auto scroll-thin sm:grid-cols-2 lg:grid-cols-3">
+              {filteredExercises.map((e) => {
+                const has = Boolean(e.instructions);
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => openExercise(e)}
+                    className="flex items-center gap-3 rounded-xl border border-ink-100 p-3 text-left transition hover:border-brand-300 hover:bg-brand-50/30"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink-50 text-ink-500">
+                      <Dumbbell className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-ink-900">{e.name}</div>
+                      <div className="truncate text-xs text-ink-500">{e.muscle}{e.video ? " · video" : ""}</div>
+                    </div>
+                    {has ? (
+                      <span className="badge shrink-0 bg-accent-500/15 text-accent-400">
+                        <ListOrdered className="h-3 w-3" /> Instructions
+                      </span>
+                    ) : (
+                      <span className="badge shrink-0 bg-ink-100 text-ink-400">Add</span>
+                    )}
+                  </button>
+                );
+              })}
+              {filteredExercises.length === 0 && (
+                <p className="col-span-full py-6 text-center text-sm text-ink-400">
+                  No exercises match your search.
+                </p>
+              )}
+            </div>
+          </>
         )}
       </section>
 
@@ -209,6 +264,50 @@ export default function LibraryPage() {
             </Field>
           </div>
         </div>
+      </Modal>
+
+      {/* Exercise instructions viewer / editor */}
+      <Modal
+        open={!!exEditing}
+        onClose={() => setExEditing(null)}
+        title={exEditing ? exEditing.name : "Exercise"}
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setExEditing(null)}>Close</button>
+            <button className="btn-primary" onClick={saveExercise}>Save instructions</button>
+          </>
+        }
+      >
+        {exEditing && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <span className="badge bg-ink-100 text-ink-600">{exEditing.muscle}</span>
+              <span className="badge bg-ink-100 text-ink-600">{exEditing.equipment}</span>
+              <span className="badge bg-ink-100 text-ink-600">{exEditing.level}</span>
+            </div>
+            <Field label="Written instructions (one step per line)">
+              <textarea
+                className="input min-h-[180px] resize-y"
+                value={exInstr}
+                onChange={(e) => setExInstr(e.target.value)}
+                placeholder={"1) Set up in the starting position…\n2) Perform the movement…\n3) Return under control."}
+              />
+              <p className="mt-1 text-xs text-ink-400">
+                These appear in every workout that uses this exercise and in the client&rsquo;s workout player.
+              </p>
+            </Field>
+            {exInstr.trim() && (
+              <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-ink-400">Preview</div>
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-600 marker:font-semibold marker:text-brand-500">
+                  {exInstr.split("\n").map((s) => s.trim()).filter(Boolean).map((step, i) => (
+                    <li key={i}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </>
   );

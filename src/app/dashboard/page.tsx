@@ -3,13 +3,13 @@
 import Link from "next/link";
 import {
   Users, Dumbbell, ClipboardList, Activity, ArrowRight, Calendar,
-  AlertTriangle, CheckCircle2, Flame, CalendarPlus,
+  AlertTriangle, CheckCircle2, Flame, CalendarPlus, Plus, Sparkles, CalendarDays,
 } from "lucide-react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
 import { useApp, useMyClients } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 // Appointments use day 0 = Monday; map JS getDay() (0 = Sun) onto that.
 function todayIndex() {
@@ -30,6 +30,16 @@ export default function DashboardPage() {
 
   const firstName = (app.settings.trainerName?.trim() || "Coach").split(" ")[0];
   const business = app.settings.businessName?.trim() || "your gym";
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: "long", month: "long", day: "numeric",
+  });
+
+  const quickActions = [
+    { href: "/dashboard/workouts", label: "Create workout", icon: Dumbbell, primary: true },
+    { href: "/dashboard/clients?new=1", label: "Add client", icon: Users },
+    { href: "/dashboard/program-builder", label: "Build program", icon: ClipboardList },
+    { href: "/dashboard/calendar", label: "Schedule", icon: CalendarDays },
+  ];
 
   const clientCount = myClients.length;
   const avgAdherence =
@@ -45,10 +55,44 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader
-        title={`Welcome back, ${firstName} 👋`}
-        subtitle={`Here's what's happening at ${business} today.`}
-      />
+      {/* Welcome hero */}
+      <section className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-700 to-ink-100 p-6 text-white shadow-glow sm:p-8">
+        <div className="pointer-events-none absolute inset-0 bg-grid opacity-20" />
+        <div className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
+        <div className="relative flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-100">
+              <Sparkles className="h-4 w-4" /> {todayLabel}
+            </div>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+              Welcome back, {firstName} 👋
+            </h1>
+            <p className="mt-1 max-w-md text-sm text-brand-100">
+              Here&apos;s what&apos;s happening at {business} today.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {quickActions.map((a) => {
+              const Icon = a.icon;
+              return (
+                <Link
+                  key={a.label}
+                  href={a.href}
+                  className={cn(
+                    "btn",
+                    a.primary
+                      ? "bg-white text-ink-900 shadow-soft hover:bg-white/90"
+                      : "bg-white/15 text-white ring-1 ring-inset ring-white/30 backdrop-blur-sm hover:bg-white/25",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {a.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Active clients" value={String(clientCount)} icon={Users} />

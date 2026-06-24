@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ChevronLeft, Clock, Flame, Check, CheckCircle2, Dumbbell, PartyPopper,
   Timer, TrendingUp, AlertTriangle, Activity, X, Play, UserPlus,
-  Wrench, ListOrdered, Info, ChevronDown,
+  Wrench, ListOrdered, Info,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { EmptyState } from "@/components/ui/Modal";
@@ -295,24 +295,22 @@ function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Wo
                 </p>
               )}
 
-              {/* How to perform — written step-by-step instructions */}
+              {/* How to perform — always-visible step-by-step instructions */}
               {(() => {
                 const steps = (libById(ex.exerciseId)?.instructions ?? "")
                   .split("\n").map((s) => s.trim()).filter(Boolean);
                 if (steps.length === 0) return null;
                 return (
-                  <details className="group/howto mt-3 rounded-lg border border-ink-100 bg-ink-50/60">
-                    <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-ink-700">
-                      <ListOrdered className="h-3.5 w-3.5 text-brand-500" />
-                      How to perform
-                      <ChevronDown className="ml-auto h-4 w-4 text-ink-400 transition group-open/howto:rotate-180" />
-                    </summary>
-                    <ol className="list-decimal space-y-1 px-3 pb-3 pl-8 text-xs text-ink-600 marker:text-ink-400">
+                  <div className="mt-3 rounded-xl border border-ink-100 bg-ink-50/60 p-3">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                      <ListOrdered className="h-3.5 w-3.5 text-brand-500" /> How to perform
+                    </div>
+                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-600 marker:font-semibold marker:text-brand-500">
                       {steps.map((step, si) => (
                         <li key={si}>{step}</li>
                       ))}
                     </ol>
-                  </details>
+                  </div>
                 );
               })()}
 

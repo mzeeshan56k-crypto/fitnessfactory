@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Plus, Dumbbell, Layers, Library, GripVertical, Clock, Search,
   Play, Users, Trash2, Loader2, Pencil, Info, ListOrdered, X, Wrench,
+  Copy, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
@@ -89,6 +90,10 @@ export default function TrainingPage() {
 
   // Add-exercise-to-workout control
   const [addExId, setAddExId] = useState("");
+
+  // Drag-and-drop reorder state (index of the exercise being dragged / hovered)
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
 
   const filteredExercises = useMemo(() => {
     return app.exercises.filter((e) => {
@@ -271,6 +276,71 @@ export default function TrainingPage() {
     });
   }
 
+  // Move an exercise from one position to another (drag-drop and up/down).
+  function moveExercise(from: number, to: number) {
+    if (!selectedWorkout) return;
+    if (to < 0 || to >= selectedWorkout.exercises.length || from === to) return;
+    const next = [...selectedWorkout.exercises];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    app.updateWorkout(selectedWorkout.id, { exercises: next });
+  }
+
+  function handleDrop(to: number) {
+    if (dragIndex !== null) moveExercise(dragIndex, to);
+    setDragIndex(null);
+    setOverIndex(null);
+  }
+
+  // Inline set editing for a given exercise.
+  function patchSet(exIndex: number, setIndex: number, patch: Partial<import("@/lib/data").WorkoutSet>) {
+    if (!selectedWorkout) return;
+    app.updateWorkout(selectedWorkout.id, {
+      exercises: selectedWorkout.exercises.map((ex, i) =>
+        i === exIndex
+          ? { ...ex, sets: ex.sets.map((s, si) => (si === setIndex ? { ...s, ...patch } : s)) }
+          : ex,
+      ),
+    });
+  }
+
+  function addSet(exIndex: number) {
+    if (!selectedWorkout) return;
+    app.updateWorkout(selectedWorkout.id, {
+      exercises: selectedWorkout.exercises.map((ex, i) => {
+        if (i !== exIndex) return ex;
+        const last = ex.sets[ex.sets.length - 1] ?? { reps: "10", weight: "—", rest: "60s" };
+        return { ...ex, sets: [...ex.sets, { ...last }] };
+      }),
+    });
+  }
+
+  function removeSet(exIndex: number, setIndex: number) {
+    if (!selectedWorkout) return;
+    app.updateWorkout(selectedWorkout.id, {
+      exercises: selectedWorkout.exercises.map((ex, i) =>
+        i === exIndex && ex.sets.length > 1
+          ? { ...ex, sets: ex.sets.filter((_, si) => si !== setIndex) }
+          : ex,
+      ),
+    });
+  }
+
+  // Duplicate an existing workout as a new editable copy (build from a template).
+  function duplicateWorkout(w: Workout) {
+    const copy = app.addWorkout({
+      name: `${w.name} (copy)`,
+      category: w.category,
+      durationMin: w.durationMin,
+      difficulty: w.difficulty,
+      format: w.format,
+      instructions: w.instructions,
+      equipment: w.equipment,
+      exercises: w.exercises.map((ex) => ({ ...ex, sets: ex.sets.map((s) => ({ ...s })) })),
+    });
+    setSelectedId(copy.id);
+  }
+
   return (
     <>
       <PageHeader
@@ -390,35 +460,47 @@ export default function TrainingPage() {
                 {app.workouts.map((w) => {
                   const active = selectedWorkout?.id === w.id;
                   return (
-                    <button
+                    <div
                       key={w.id}
-                      onClick={() => setSelectedId(w.id)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition",
+                        "group/wk flex items-center gap-3 rounded-xl border p-3 transition",
                         active
                           ? "border-brand-300 bg-brand-50/60"
                           : "border-ink-100 hover:border-brand-200 hover:bg-brand-50/30",
                       )}
                     >
-                      <span
-                        className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-lg",
-                          active ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-500",
-                        )}
+                      <button
+                        onClick={() => setSelectedId(w.id)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
-                        <Dumbbell className="h-5 w-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-ink-900">{w.name}</div>
-                        <div className="flex items-center gap-2 text-xs text-ink-500">
-                          <span>{w.category}</span>
-                          <span>·</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {w.durationMin}m
-                          </span>
+                        <span
+                          className={cn(
+                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                            active ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-500",
+                          )}
+                        >
+                          <Dumbbell className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold text-ink-900">{w.name}</div>
+                          <div className="flex items-center gap-2 text-xs text-ink-500">
+                            <span className="truncate">{w.category}</span>
+                            <span>·</span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" /> {w.durationMin}m
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      <button
+                        onClick={() => duplicateWorkout(w)}
+                        aria-label={`Duplicate ${w.name}`}
+                        title="Duplicate as a new workout"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 opacity-0 transition hover:bg-brand-500/15 hover:text-brand-500 focus:opacity-100 group-hover/wk:opacity-100"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -496,62 +578,124 @@ export default function TrainingPage() {
 
                 {/* Exercise prescription */}
                 <div className="mt-5 space-y-4">
-                  {selectedWorkout.exercises.map((ex, i) => (
-                    <div key={`${ex.exerciseId}-${i}`} className="rounded-xl border border-ink-100">
-                      <div className="flex items-center gap-3 border-b border-ink-100 p-3">
-                        <GripVertical className="h-5 w-5 cursor-grab text-ink-300" />
-                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15 text-xs font-bold text-brand-400">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold text-ink-900">{ex.name}</div>
-                          <div className="text-xs text-ink-500">{ex.muscle}</div>
-                        </div>
-                        <span className="badge bg-ink-100 text-ink-600">{ex.sets.length} sets</span>
-                        <button
-                          onClick={() => removeExerciseFromWorkout(i)}
-                          aria-label={`Remove ${ex.name} from workout`}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <div className="p-3">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-xs uppercase tracking-wide text-ink-400">
-                              <th className="pb-2 pl-1 font-medium">Set</th>
-                              <th className="pb-2 font-medium">Reps</th>
-                              <th className="pb-2 font-medium">Weight</th>
-                              <th className="pb-2 font-medium">Rest</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ex.sets.map((s, si) => (
-                              <tr key={si} className="border-t border-ink-50">
-                                <td className="py-2 pl-1 font-semibold text-ink-700">{si + 1}</td>
-                                <td className="py-2 text-ink-700">{s.reps}</td>
-                                <td className="py-2 text-ink-700">{s.weight}</td>
-                                <td className="py-2 text-ink-500">{s.rest}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {/* Per-exercise coaching cue (shown to the member next to the set) */}
-                        <label className="mt-2 block">
-                          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                            Coaching cue
+                  {selectedWorkout.exercises.map((ex, i) => {
+                    const isDragging = dragIndex === i;
+                    const isOver = overIndex === i && dragIndex !== null && dragIndex !== i;
+                    return (
+                      <div
+                        key={`${ex.exerciseId}-${i}`}
+                        onDragOver={(e) => { e.preventDefault(); setOverIndex(i); }}
+                        onDrop={() => handleDrop(i)}
+                        className={cn(
+                          "rounded-xl border border-ink-100 bg-ink-100 transition",
+                          isDragging && "opacity-50",
+                          isOver && "border-brand-400 ring-2 ring-brand-200",
+                        )}
+                      >
+                        <div className="flex items-center gap-2 border-b border-ink-100 p-3 sm:gap-3">
+                          <div
+                            draggable
+                            onDragStart={() => setDragIndex(i)}
+                            onDragEnd={() => { setDragIndex(null); setOverIndex(null); }}
+                            aria-label={`Drag to reorder ${ex.name}`}
+                            className="flex cursor-grab touch-none items-center text-ink-300 hover:text-ink-500 active:cursor-grabbing"
+                          >
+                            <GripVertical className="h-5 w-5" />
+                          </div>
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-xs font-bold text-brand-400">
+                            {i + 1}
                           </span>
-                          <input
-                            value={ex.notes ?? ""}
-                            onChange={(e) => updateExerciseNote(i, e.target.value)}
-                            placeholder="e.g. Slow, controlled descent"
-                            className="input px-2.5 py-1.5 text-sm"
-                          />
-                        </label>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-ink-900">{ex.name}</div>
+                            <div className="text-xs text-ink-500">{ex.muscle}</div>
+                          </div>
+                          {/* Up / down reorder (accessible fallback for drag-and-drop) */}
+                          <div className="flex flex-col">
+                            <button
+                              onClick={() => moveExercise(i, i - 1)}
+                              disabled={i === 0}
+                              aria-label={`Move ${ex.name} up`}
+                              className="flex h-5 w-6 items-center justify-center rounded text-ink-400 hover:bg-ink-200 hover:text-ink-700 disabled:opacity-30"
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => moveExercise(i, i + 1)}
+                              disabled={i === selectedWorkout.exercises.length - 1}
+                              aria-label={`Move ${ex.name} down`}
+                              className="flex h-5 w-6 items-center justify-center rounded text-ink-400 hover:bg-ink-200 hover:text-ink-700 disabled:opacity-30"
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => removeExerciseFromWorkout(i)}
+                            aria-label={`Remove ${ex.name} from workout`}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="p-3">
+                          {/* Inline-editable set prescription */}
+                          <div className="grid grid-cols-[1.5rem_1fr_1fr_1fr_1.75rem] items-center gap-2 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                            <span>Set</span><span>Reps</span><span>Weight</span><span>Rest</span><span />
+                          </div>
+                          <div className="mt-1 space-y-1.5">
+                            {ex.sets.map((s, si) => (
+                              <div key={si} className="grid grid-cols-[1.5rem_1fr_1fr_1fr_1.75rem] items-center gap-2">
+                                <span className="text-sm font-semibold text-ink-700">{si + 1}</span>
+                                <input
+                                  value={s.reps}
+                                  onChange={(e) => patchSet(i, si, { reps: e.target.value })}
+                                  aria-label={`Reps for set ${si + 1}`}
+                                  className="input px-2 py-1.5 text-center text-sm"
+                                />
+                                <input
+                                  value={s.weight}
+                                  onChange={(e) => patchSet(i, si, { weight: e.target.value })}
+                                  aria-label={`Weight for set ${si + 1}`}
+                                  className="input px-2 py-1.5 text-center text-sm"
+                                />
+                                <input
+                                  value={s.rest}
+                                  onChange={(e) => patchSet(i, si, { rest: e.target.value })}
+                                  aria-label={`Rest for set ${si + 1}`}
+                                  className="input px-2 py-1.5 text-center text-sm"
+                                />
+                                <button
+                                  onClick={() => removeSet(i, si)}
+                                  disabled={ex.sets.length <= 1}
+                                  aria-label={`Remove set ${si + 1}`}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400 disabled:opacity-30"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() => addSet(i)}
+                            className="mt-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-brand-500 hover:bg-brand-500/10"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Add set
+                          </button>
+                          {/* Per-exercise coaching cue (shown to the member next to the set) */}
+                          <label className="mt-3 block">
+                            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                              Coaching cue
+                            </span>
+                            <input
+                              value={ex.notes ?? ""}
+                              onChange={(e) => updateExerciseNote(i, e.target.value)}
+                              placeholder="e.g. Slow, controlled descent"
+                              className="input px-2.5 py-1.5 text-sm"
+                            />
+                          </label>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {selectedWorkout.exercises.length === 0 && (
                     <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/40 px-4 py-6 text-center text-sm text-ink-400">
