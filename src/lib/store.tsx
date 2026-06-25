@@ -13,7 +13,7 @@ import type {
 } from "@/lib/platform";
 import type { SessionUser } from "@/lib/auth/session";
 import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms } from "@/lib/seed-content";
-import { computeAdherence, computeProgress } from "@/lib/metrics";
+import { clientAdherence, clientProgress } from "@/lib/metrics";
 
 export function uid(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -617,17 +617,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const completeWorkout = useCallback((clientId: string, summary: Omit<WorkoutCompletion, "id" | "date">) => {
     const completion: WorkoutCompletion = { id: uid("wc"), date: new Date().toISOString(), ...summary };
-    setDb((d) => {
-      const list = [completion, ...(d.completions[clientId] ?? [])];
-      const client = d.clients.find((c) => c.id === clientId);
-      const adherence = computeAdherence(d.clientPlans[clientId], list, client?.adherence ?? 0);
-      return {
-        ...d,
-        completions: { ...d.completions, [clientId]: list },
-        // Adherence reflects real logged sessions and updates live.
-        clients: d.clients.map((c) => (c.id === clientId ? { ...c, adherence, lastActive: "Just now" } : c)),
-      };
-    });
+    setDb((d) => ({
+      ...d,
+      completions: { ...d.completions, [clientId]: [completion, ...(d.completions[clientId] ?? [])] },
+      // Adherence/progress are derived live from completions — just stamp activity.
+      clients: d.clients.map((c) => (c.id === clientId ? { ...c, lastActive: "Just now" } : c)),
+    }));
     // Members persist via the dedicated endpoint (they can't bulk-save).
     if (sessionRef.current?.role === "member") {
       fetch("/api/member/activity", {
@@ -674,12 +669,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDb((d) => ({
       ...d,
       weightLogs: { ...d.weightLogs, [clientId]: [entry, ...(d.weightLogs[clientId] ?? [])] },
-      // Keep the client's headline weight + goal progress in sync, live.
-      clients: d.clients.map((c) =>
-        c.id === clientId
-          ? { ...c, currentWeight: weight, progress: computeProgress({ ...c, currentWeight: weight }, c.progress), lastActive: "Just now" }
-          : c,
-      ),
+      // Headline weight drives derived progress; just store it + stamp activity.
+      clients: d.clients.map((c) => (c.id === clientId ? { ...c, currentWeight: weight, lastActive: "Just now" } : c)),
     }));
     if (sessionRef.current?.role === "member") {
       fetch("/api/member/activity", {
@@ -738,8 +729,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateSettings = useCallback((patch: Partial<AppSettings>) =>
     setDb((d) => ({ ...d, settings: { ...d.settings, ...patch } })), []);
 
+  // Expose clients with adherence/progress DERIVED live from real activity, so
+  // every view (dashboard, roster, client detail, the member's own portal)
+  // reflects what the client has actually logged — and updates as data syncs.
+  const clientsWithMetrics = useMemo(
+    () =>
+      db.clients.map((c) => ({
+        ...c,
+        adherence: clientAdherence(c.id, db, c.adherence),
+        progress: clientProgress(c.id, c, db, c.progress),
+      })),
+    [db],
+  );
+
   const value = useMemo<AppContextValue>(() => ({
-    ...db, hydrated, session, signOut,
+    ...db, clients: clientsWithMetrics, hydrated, session, signOut,
     set, loadStarterContent, resetAll,
     addForm, updateForm, removeForm,
     addClient, updateClient, removeClient, setCurrentClient,
@@ -760,7 +764,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addBroadcast,
     updateSettings,
   }), [
-    db, hydrated, session, signOut, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
+    db, clientsWithMetrics, hydrated, session, signOut, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
     setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,

@@ -3,16 +3,10 @@
 import Link from "next/link";
 import {
   Dumbbell, Flame, Target, TrendingDown, ChevronRight, CheckCircle2,
-  Calendar, Apple, Droplet, Moon, Footprints,
-  ClipboardCheck, Trophy, GraduationCap, UserPlus,
+  Calendar, ClipboardCheck, Trophy, GraduationCap, UserPlus,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
-import { habits } from "@/lib/data";
 import { EmptyState } from "@/components/ui/Modal";
-
-const habitIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  footprints: Footprints, droplet: Droplet, moon: Moon, utensils: Apple,
-};
 
 export default function ClientTodayPage() {
   const app = useApp();
@@ -42,7 +36,13 @@ export default function ClientTodayPage() {
   const todaysWorkout = assignedWorkouts[0];
   const lost = c.startWeight - c.currentWeight;
   const toGoal = Math.abs(c.currentWeight - c.goalWeight);
-  const streak = Math.max(0, ...habits.map((h) => h.streak));
+
+  // Real "this week" activity for this member.
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  const myCompletions = app.completions[c.id] ?? [];
+  const sessionsThisWeek = myCompletions.filter((w) => +new Date(w.date) >= weekAgo).length;
+  const checkinsThisWeek = app.checkins.filter((ci) => ci.clientId === c.id && +new Date(ci.date) >= weekAgo).length;
+  const lastSession = myCompletions[0];
 
   return (
     <div className="space-y-6">
@@ -126,9 +126,9 @@ export default function ClientTodayPage() {
 
       {/* Quick stats */}
       <section className="grid grid-cols-3 gap-3">
-        <StatTile icon={Flame} label="Streak" value={`${streak} days`} tint="text-orange-500 bg-orange-500/15" />
+        <StatTile icon={Dumbbell} label="Sessions / wk" value={`${sessionsThisWeek}`} tint="text-brand-400 bg-brand-500/15" />
         <StatTile icon={TrendingDown} label="Weight lost" value={`${lost} lb`} tint="text-accent-400 bg-accent-500/15" />
-        <StatTile icon={Target} label="To goal" value={`${toGoal} lb`} tint="text-brand-400 bg-brand-500/15" />
+        <StatTile icon={Target} label="To goal" value={`${toGoal} lb`} tint="text-orange-500 bg-orange-500/15" />
       </section>
 
       {/* Goal progress */}
@@ -153,33 +153,31 @@ export default function ClientTodayPage() {
         </div>
       </section>
 
-      {/* Habits */}
+      {/* This week recap (real activity) */}
       <section className="card p-5">
-        <h2 className="font-semibold text-ink-900">Today&apos;s habits</h2>
-        <div className="mt-4 space-y-2">
-          {habits.map((h) => {
-            const Icon = habitIcons[h.icon] ?? CheckCircle2;
-            const doneToday = h.weekly[h.weekly.length - 1];
-            return (
-              <div
-                key={h.id}
-                className="flex items-center gap-3 rounded-xl border border-ink-100 p-3"
-              >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-ink-900">{h.name}</div>
-                  <div className="flex items-center gap-1 text-xs text-ink-400">
-                    <Flame className="h-3 w-3 text-orange-400" /> {h.streak} day streak
-                  </div>
-                </div>
-                <CheckCircle2
-                  className={doneToday ? "h-6 w-6 text-accent-500" : "h-6 w-6 text-ink-200"}
-                />
-              </div>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          <Flame className="h-5 w-5 text-orange-500" />
+          <h2 className="font-semibold text-ink-900">This week</h2>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-4 text-center">
+            <div className="text-2xl font-bold text-ink-900">{sessionsThisWeek}</div>
+            <div className="text-xs text-ink-500">Sessions logged</div>
+          </div>
+          <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-4 text-center">
+            <div className="text-2xl font-bold text-ink-900">{checkinsThisWeek}</div>
+            <div className="text-xs text-ink-500">Check-ins</div>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-3 rounded-xl border border-ink-100 p-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-500/15 text-accent-400">
+            <CheckCircle2 className="h-4 w-4" />
+          </span>
+          <div className="flex-1 text-sm text-ink-600">
+            {lastSession
+              ? <>Last session: <span className="font-semibold text-ink-900">{lastSession.workoutName}</span> · {new Date(lastSession.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</>
+              : "No sessions logged yet — start your assigned workout above."}
+          </div>
         </div>
       </section>
 

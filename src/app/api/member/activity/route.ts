@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kvGet, kvSet } from "@/lib/storage";
 import { getSessionUser } from "@/lib/auth/accounts";
-import { computeAdherence, computeProgress } from "@/lib/metrics";
 
 export const runtime = "nodejs";
 
@@ -110,9 +109,8 @@ export async function POST(req: NextRequest) {
     };
     const all = ws.completions ?? {};
     ws.completions = { ...all, [mine.id]: [completion, ...(all[mine.id] ?? [])] };
-    // Recompute adherence from real logged sessions so the coach sees it live.
-    const adherence = computeAdherence(ws.clientPlans?.[mine.id], ws.completions[mine.id], mine.adherence ?? 0);
-    ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, adherence, lastActive: "Just now" } : c));
+    // Adherence/progress are derived live from completions on every portal.
+    ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, lastActive: "Just now" } : c));
   } else if (body.kind === "photo") {
     const p = body.photo ?? {};
     if (!p.url) return NextResponse.json({ error: "Missing photo." }, { status: 400 });
@@ -144,20 +142,8 @@ export async function POST(req: NextRequest) {
     const entry: WeightEntry = { date: new Date().toISOString(), weight };
     const all = ws.weightLogs ?? {};
     ws.weightLogs = { ...all, [mine.id]: [entry, ...(all[mine.id] ?? [])].slice(0, 365) };
-    // Keep the client's headline weight + goal progress in sync, live.
-    ws.clients = (ws.clients ?? []).map((c) =>
-      c.id === mine.id
-        ? {
-            ...c,
-            currentWeight: weight,
-            lastActive: "Just now",
-            progress: computeProgress(
-              { startWeight: c.startWeight ?? 0, currentWeight: weight, goalWeight: c.goalWeight ?? 0 },
-              c.progress ?? 0,
-            ),
-          }
-        : c,
-    );
+    // Headline weight drives derived progress on every portal.
+    ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, currentWeight: weight, lastActive: "Just now" } : c));
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }
