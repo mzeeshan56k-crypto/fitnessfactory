@@ -136,6 +136,7 @@ export interface ClientPlan {
   workoutIds: string[];
   programId?: string;
   mealPlanId?: string;
+  formIds?: string[]; // forms the client should fill out
 }
 
 // A logged training session the member completed (coach reviews these).

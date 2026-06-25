@@ -151,7 +151,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { signOut } = useApp();
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  // Groups start expanded so every destination is visible at a glance; the
+  // coach can collapse any group they don't use.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(nav.filter(isGroup).map((g) => [g.label, true])),
+  );
   const [search, setSearch] = useState("");
 
   // Auto-expand whichever group contains the active route as you navigate.

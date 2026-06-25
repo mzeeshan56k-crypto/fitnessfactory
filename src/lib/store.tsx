@@ -44,6 +44,8 @@ export interface CheckIn {
   clientId: string;
   date: string;
   answers: Record<string, string | number>;
+  formId?: string;
+  formName?: string;
 }
 
 export type FormFieldType =
@@ -167,7 +169,11 @@ interface AppContextValue extends DB {
   // ai
   resolveSuggestion: (id: string, status: "approved" | "dismissed" | "pending") => void;
   // checkins
-  addCheckin: (clientId: string, answers: Record<string, string | number>) => void;
+  addCheckin: (
+    clientId: string,
+    answers: Record<string, string | number>,
+    meta?: { formId?: string; formName?: string },
+  ) => void;
   // coach documentation
   addFormReview: (clientId: string, review: FormReview) => void;
   deleteFormReview: (clientId: string, id: string) => void;
@@ -175,6 +181,7 @@ interface AppContextValue extends DB {
   setRecoveryNote: (clientId: string, text: string) => void;
   // assignment (coach → client)
   toggleAssignedWorkout: (clientId: string, workoutId: string) => void;
+  toggleAssignedForm: (clientId: string, formId: string) => void;
   setClientProgram: (clientId: string, programId: string) => void;
   setClientMealPlan: (clientId: string, mealPlanId: string) => void;
   // member logs a completed session
@@ -239,10 +246,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Live sync: poll periodically and whenever the tab regains focus.
+  // Live sync: poll frequently and whenever the tab regains focus so coach and
+  // member see each other's changes almost instantly.
   useEffect(() => {
     if (!hydrated || !session) return;
-    const id = window.setInterval(refresh, 15000);
+    const id = window.setInterval(refresh, 3500);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -529,17 +537,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })), []);
 
   /* ----- checkins ----- */
-  const addCheckin = useCallback((clientId: string, answers: Record<string, string | number>) => {
-    const ci: CheckIn = { id: uid("ci"), clientId, date: new Date().toISOString(), answers };
+  const addCheckin = useCallback((
+    clientId: string,
+    answers: Record<string, string | number>,
+    meta?: { formId?: string; formName?: string },
+  ) => {
+    const ci: CheckIn = {
+      id: uid("ci"), clientId, date: new Date().toISOString(), answers,
+      formId: meta?.formId, formName: meta?.formName,
+    };
     setDb((d) => ({ ...d, checkins: [ci, ...d.checkins] }));
     if (sessionRef.current?.role === "member") {
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "checkin", answers }),
-      }).catch(() => {});
+        body: JSON.stringify({ kind: "checkin", answers, formId: meta?.formId, formName: meta?.formName }),
+      })
+        .then(() => refresh())
+        .catch(() => {});
     }
-  }, []);
+  }, [refresh]);
 
   /* ----- coach documentation ----- */
   const addFormReview = useCallback((clientId: string, review: FormReview) =>
@@ -569,6 +586,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? plan.workoutIds.filter((id) => id !== workoutId)
         : [...plan.workoutIds, workoutId];
       return { ...d, clientPlans: { ...d.clientPlans, [clientId]: { ...plan, workoutIds } } };
+    }), []);
+  const toggleAssignedForm = useCallback((clientId: string, formId: string) =>
+    setDb((d) => {
+      const plan = d.clientPlans[clientId] ?? { workoutIds: [] };
+      const current = plan.formIds ?? [];
+      const has = current.includes(formId);
+      const formIds = has ? current.filter((id) => id !== formId) : [...current, formId];
+      return { ...d, clientPlans: { ...d.clientPlans, [clientId]: { ...plan, formIds } } };
     }), []);
   const setClientProgram = useCallback((clientId: string, programId: string) =>
     setDb((d) => {
@@ -713,7 +738,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
+    toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser,
     addBroadcast,
@@ -725,7 +750,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
+    toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);

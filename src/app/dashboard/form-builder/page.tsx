@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Loader2, Plus, Trash2, ClipboardList, Save, ArrowUp, ArrowDown, FileText,
   Eye, Pencil, Sparkles, LayoutTemplate, X, CheckCircle2,
@@ -168,8 +168,14 @@ export default function FormBuilderPage() {
   const [fields, setFields] = useState<DraftField[]>([newField()]);
   const [preview, setPreview] = useState<CoachForm | null>(null);
   const [justSaved, setJustSaved] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+  const builderRef = useRef<HTMLDivElement>(null);
 
   if (!app.hydrated) return <Loading />;
+
+  function scrollToBuilder() {
+    builderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   function patchField(id: string, patch: Partial<DraftField>) {
     setFields((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
@@ -193,7 +199,7 @@ export default function FormBuilderPage() {
     setName("Weekly check-in");
     setDescription("");
     setFields([newField()]);
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToBuilder();
   }
 
   // Load a template (always creates a NEW form) or a saved form (edits in place).
@@ -202,7 +208,9 @@ export default function FormBuilderPage() {
     setName(asEdit ? form.name : `${form.name} (copy)`);
     setDescription(form.description ?? "");
     setFields(toDraft(form.fields));
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    setFlash(asEdit ? `Editing "${form.name}" below` : `Loaded "${form.name}" — customize and save`);
+    setTimeout(() => setFlash(null), 4000);
+    scrollToBuilder();
   }
 
   function saveForm() {
@@ -295,7 +303,12 @@ export default function FormBuilderPage() {
       </section>
 
       {/* ---- Builder + live preview ---- */}
-      <div className="grid gap-5 lg:grid-cols-2">
+      {flash && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm font-medium text-brand-300">
+          <Sparkles className="h-4 w-4" /> {flash}
+        </div>
+      )}
+      <div ref={builderRef} className="grid scroll-mt-6 gap-5 lg:grid-cols-2">
         {/* Builder */}
         <div className="card space-y-4 p-5">
           <div className="flex items-center justify-between">

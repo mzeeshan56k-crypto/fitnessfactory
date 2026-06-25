@@ -8,7 +8,7 @@ const WORKSPACE_KEY = "ffkc:workspace";
 
 interface Message { id: string; fromClient: boolean; text: string; time: string }
 interface Conversation { clientId: string; unread: number; messages: Message[] }
-interface CheckIn { id: string; clientId: string; date: string; answers: Record<string, string | number> }
+interface CheckIn { id: string; clientId: string; date: string; answers: Record<string, string | number>; formId?: string; formName?: string }
 interface Completion {
   id: string; workoutId: string; workoutName: string; date: string;
   setsLogged: number; volume: number; avgRpe: number;
@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
     kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight";
     text?: string;
     answers?: Record<string, string | number>;
+    formId?: string;
+    formName?: string;
     completion?: Partial<Completion>;
     photo?: Partial<Photo>;
     photoId?: string;
@@ -84,6 +86,8 @@ export async function POST(req: NextRequest) {
       clientId: mine.id,
       date: new Date().toISOString(),
       answers: body.answers ?? {},
+      ...(body.formId ? { formId: String(body.formId) } : {}),
+      ...(body.formName ? { formName: String(body.formName) } : {}),
     };
     ws.checkins = [ci, ...(ws.checkins ?? [])];
   } else if (body.kind === "workout") {

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home, Dumbbell, Apple, LineChart, MessageSquare,
   Activity, CalendarCheck, GraduationCap, Trophy, ClipboardCheck, Award, UsersRound,
-  HeartPulse,
+  HeartPulse, FileText,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
@@ -21,6 +21,7 @@ const navBiometrics = { href: "/client/biometrics", label: "Biometrics", icon: A
 const navRecovery = { href: "/client/recovery", label: "Recovery", icon: HeartPulse };
 const navChallenges = { href: "/client/challenges", label: "Challenges", icon: Trophy };
 const navCheckin = { href: "/client/checkin", label: "Check-in", icon: ClipboardCheck };
+const navForms = { href: "/client/forms", label: "Forms", icon: FileText };
 const navSchedule = { href: "/client/schedule", label: "Booking", icon: CalendarCheck };
 const navResources = { href: "/client/resources", label: "Learn", icon: GraduationCap };
 const navAchievements = { href: "/client/achievements", label: "Achievements", icon: Award };
@@ -29,7 +30,7 @@ const navCoach = { href: "/client/messages", label: "Coach", icon: MessageSquare
 
 const nav = [
   navToday, navWorkouts, navNutrition, navProgress, navBiometrics, navRecovery,
-  navChallenges, navCheckin, navSchedule, navResources, navAchievements, navCommunity, navCoach,
+  navChallenges, navCheckin, navForms, navSchedule, navResources, navAchievements, navCommunity, navCoach,
 ];
 
 // Mobile bottom bar shows the 5 most-used destinations.

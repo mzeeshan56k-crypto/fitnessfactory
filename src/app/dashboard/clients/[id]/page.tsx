@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, MessageSquare, Pencil, Trash2, Scale, Target, Flag, Activity,
   Dumbbell, Calendar, Sparkles, Clock, Layers, LineChart, Loader2, Images,
-  Mail, Check, KeyRound, X, Apple, CheckCircle2, ClipboardCheck, UserCog,
+  Mail, Check, KeyRound, X, Apple, CheckCircle2, ClipboardCheck, UserCog, FileText,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
@@ -46,9 +46,9 @@ function Loading() {
 export default function ClientDetailPage({ params }: { params: { id: string } }) {
   const {
     clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings,
-    workouts: libWorkouts, programs, mealPlans, clientPlans, completions, photos,
+    workouts: libWorkouts, programs, mealPlans, forms, clientPlans, completions, photos,
     weightLogs, checkins, nutritionLogs, session, assignCoach,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
+    toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
   } = useApp();
   const [coaches, setCoaches] = useState<{ email: string; name: string; role: string }[]>([]);
   const router = useRouter();
@@ -174,6 +174,11 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     .map((id) => libWorkouts.find((w) => w.id === id))
     .filter((w): w is NonNullable<typeof w> => Boolean(w));
   const unassignedWorkouts = libWorkouts.filter((w) => !plan.workoutIds.includes(w.id));
+  const assignedFormIds = plan.formIds ?? [];
+  const assignedForms = assignedFormIds
+    .map((id) => forms.find((f) => f.id === id))
+    .filter((f): f is NonNullable<typeof f> => Boolean(f));
+  const unassignedForms = forms.filter((f) => !assignedFormIds.includes(f.id));
   const sessions = completions[c.id] ?? [];
   const clientPhotos = photos[c.id] ?? [];
   const weightLog = weightLogs[c.id] ?? [];
@@ -551,6 +556,86 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               )}
             </div>
 
+            {/* Assigned forms */}
+            <div className="card p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-brand-400" />
+                  <h2 className="font-semibold text-ink-900">Assigned forms</h2>
+                  <span className="badge bg-ink-100 text-ink-600">{assignedForms.length}</span>
+                </div>
+                <div className="w-full sm:w-64">
+                  <select
+                    className="input"
+                    value=""
+                    onChange={(e) => { if (e.target.value) toggleAssignedForm(c.id, e.target.value); }}
+                    disabled={unassignedForms.length === 0}
+                  >
+                    <option value="">
+                      {forms.length === 0
+                        ? "No forms in your library"
+                        : unassignedForms.length === 0
+                          ? "All forms assigned"
+                          : "+ Assign a form…"}
+                    </option>
+                    {unassignedForms.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {assignedForms.length === 0 ? (
+                <div className="mt-4">
+                  <EmptyState
+                    icon={FileText}
+                    title="No forms assigned"
+                    description={
+                      forms.length === 0
+                        ? "Create forms in the Forms section (or load starter content), then assign them here."
+                        : `Use the dropdown above to assign check-in or intake forms. ${c.name.split(" ")[0]} fills them out in their portal and the answers come back to you.`
+                    }
+                    action={
+                      forms.length === 0
+                        ? <Link href="/dashboard/form-builder" className="btn-primary">Go to Forms</Link>
+                        : undefined
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {assignedForms.map((f) => {
+                    const submissions = clientCheckins.filter((ci) => ci.formId === f.id).length;
+                    return (
+                      <div key={f.id} className="rounded-xl border border-ink-100 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
+                              <FileText className="h-4 w-4" />
+                            </span>
+                            <h3 className="font-semibold text-ink-900">{f.name}</h3>
+                          </div>
+                          <button
+                            onClick={() => toggleAssignedForm(c.id, f.id)}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-400 transition hover:bg-rose-500/15 hover:text-rose-400"
+                            aria-label={`Unassign ${f.name}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="mt-3 flex items-center gap-2 text-sm text-ink-500">
+                          <ClipboardCheck className="h-4 w-4 text-ink-400" />
+                          {submissions > 0
+                            ? `${submissions} submission${submissions === 1 ? "" : "s"}`
+                            : "Awaiting first submission"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Completed sessions logged by the member */}
             <div className="card p-6">
               <div className="flex items-center gap-2">
@@ -622,11 +707,16 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <div className="mt-4 space-y-3">
                   {clientCheckins.slice(0, 8).map((ci) => (
                     <div key={ci.id} className="rounded-xl border border-ink-100 p-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-ink-900">
-                          {new Date(ci.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                        </span>
-                        <span className="badge bg-accent-500/15 text-accent-400">Submitted</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          {ci.formName && (
+                            <span className="block truncate text-sm font-semibold text-ink-900">{ci.formName}</span>
+                          )}
+                          <span className={cn("text-ink-500", ci.formName ? "text-xs" : "text-sm font-semibold text-ink-900")}>
+                            {new Date(ci.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </span>
+                        </div>
+                        <span className="badge shrink-0 bg-accent-500/15 text-accent-400">Submitted</span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-600">
                         {Object.entries(ci.answers).map(([k, v]) =>
