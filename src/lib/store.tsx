@@ -46,10 +46,13 @@ export interface CheckIn {
   answers: Record<string, string | number>;
 }
 
+export type FormFieldType =
+  | "short" | "long" | "number" | "scale" | "yesno" | "choice" | "checkbox";
+
 export interface FormField {
   id: string;
   label: string;
-  type: "short" | "long" | "number" | "scale" | "yesno" | "choice";
+  type: FormFieldType;
   options?: string[];
   required?: boolean;
 }

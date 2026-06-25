@@ -36,7 +36,7 @@ export function DataControls({ variant = "inline" }: { variant?: "inline" | "car
           </div>
           <p className="mt-1 text-sm text-ink-500">
             Your data is stored locally in this browser. <strong className="text-ink-700">Load starter content</strong> to
-            populate the pre-built exercise library, 20 workouts, 5 programs and 5 forms so you can start
+            populate the pre-built exercise library, 20 workouts, 5 programs and 7 forms so you can start
             building right away — or clear everything to begin from scratch.
           </p>
           <div className="mt-4">{buttons}</div>

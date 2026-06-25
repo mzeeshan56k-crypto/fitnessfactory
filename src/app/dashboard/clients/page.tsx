@@ -80,9 +80,11 @@ export default function ClientsPage() {
     loadAccess();
   }, [loadAccess]);
 
-  // Auto-open the modal when the URL has ?new=1
+  // Auto-open the modal when the URL has ?new=1, and seed the search box from ?q=
   useEffect(() => {
     if (searchParams.get("new") === "1") setOpen(true);
+    const q = searchParams.get("q");
+    if (q) setQuery(q);
   }, [searchParams]);
 
   function closeModal() {

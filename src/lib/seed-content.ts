@@ -309,6 +309,36 @@ export const seedPrograms: Program[] = [
 
 export const prebuiltForms: CoachForm[] = [
   {
+    id: "form_checkin", name: "Check-in Form",
+    description: "The classic weekly client check-in — body weight, motivation, energy, sleep, wins and challenges.",
+    fields: [
+      { id: "f1", label: "LAST WEEK Body Weight (lbs)", type: "number", required: true },
+      { id: "f2", label: "THIS WEEK Body Weight (lbs)", type: "number", required: true },
+      { id: "f3", label: "Rate motivation 1-10", type: "scale", required: true },
+      { id: "f4", label: "What factors have contributed to your motivation and/or stress levels this week?", type: "long" },
+      { id: "f5", label: "Rate hydration & digestion 1-10", type: "scale", required: true },
+      { id: "f6", label: "Did you have any digestive issues? Any specific days or situations that made adhering to diet tough/difficult?", type: "long" },
+      { id: "f7", label: "How would you describe your overall energy levels throughout the day? (e.g. consistent, fluctuating, periods of crashes)", type: "checkbox", options: ["Consistent", "Not Consistent", "Fluctuating", "Crashed Periodically", "Drained"] },
+      { id: "f8", label: "Were there any specific days or situations that made adherence particularly difficult or easy?", type: "long" },
+      { id: "f9", label: "How much sleep did you get on average?", type: "choice", options: ["4-6", "6-8", "8-10", "Other"] },
+      { id: "f10", label: "List 2-3 WINS or milestones you achieved this week.", type: "long" },
+      { id: "f11", label: "List 2-3 CHALLENGES you dealt with this week.", type: "long" },
+      { id: "f12", label: "Did you notice any improvements in strength, endurance, or technique in specific lifts or movements? Any exercises or movements that felt particularly challenging or easy?", type: "long" },
+      { id: "f13", label: "How would you describe the overall quality of your training sessions this week (e.g., focused, distracted, rushed, energized)?", type: "long" },
+      { id: "f14", label: "What are your goals for next week? What is something you can do better this upcoming week?", type: "long" },
+    ],
+  },
+  {
+    id: "form_digestion", name: "Digestion Form",
+    description: "A quick mid-week pulse on body weight, hydration, digestion and sleep.",
+    fields: [
+      { id: "f1", label: "CURRENT Body Weight (lbs)", type: "number", required: true },
+      { id: "f2", label: "Rate hydration & digestion 1-10, Did you have any digestive issues? Any specific days or situations that made adhering to diet tough/difficult?", type: "long" },
+      { id: "f3", label: "How much sleep did you get on average?", type: "choice", options: ["4-6", "6-8", "8-10", "Other"] },
+      { id: "f4", label: "What are your goals for next week? What is something you can do better this upcoming week?", type: "long" },
+    ],
+  },
+  {
     id: "form_intake", name: "New Client Intake",
     description: "Collect baseline info from a new client before building their plan.",
     fields: [

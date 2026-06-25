@@ -3,17 +3,52 @@
 import Link from "next/link";
 import {
   Users, Dumbbell, ClipboardList, Activity, ArrowRight, Calendar,
-  AlertTriangle, CheckCircle2, Flame, CalendarPlus,
+  AlertTriangle, CheckCircle2, Flame, CalendarPlus, Plus, FileSpreadsheet,
+  MessageSquare, Sparkles, TrendingUp, ClipboardCheck,
 } from "lucide-react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { StatCard } from "@/components/dashboard/StatCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
+import { AdherenceRing } from "@/components/dashboard/Charts";
 import { useApp, useMyClients } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 // Appointments use day 0 = Monday; map JS getDay() (0 = Sun) onto that.
 function todayIndex() {
   return (new Date().getDay() + 6) % 7;
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/* Gradient KPI card */
+function Kpi({
+  label, value, sub, icon: Icon, gradient,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  gradient: string;
+}) {
+  return (
+    <div className="card group relative overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-brand-500/40">
+      <div className={cn("pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-20 blur-2xl transition group-hover:opacity-40", gradient)} />
+      <div className="relative flex items-center justify-between">
+        <span className={cn("flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-soft", gradient)}>
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+      <div className="relative mt-4 text-3xl font-bold tracking-tight text-ink-900">{value}</div>
+      <div className="relative mt-1 text-sm font-medium text-ink-500">{label}</div>
+      {sub && <div className="relative mt-0.5 text-xs text-ink-400">{sub}</div>}
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -43,26 +78,140 @@ export default function DashboardPage() {
   const recent = myClients.filter((c) => c.status === "active").slice(0, 5);
   const getClient = (id: string) => myClients.find((c) => c.id === id);
 
-  return (
-    <>
-      <PageHeader
-        title={`Welcome back, ${firstName} 👋`}
-        subtitle={`Here's what's happening at ${business} today.`}
-      />
+  // ----- real weekly activity from logged workouts + check-ins -----
+  const today = new Date();
+  const week = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    return d;
+  });
+  const activity = week.map((d) => {
+    const key = d.toISOString().slice(0, 10);
+    let workouts = 0;
+    for (const c of myClients) {
+      workouts += (app.completions[c.id] ?? []).filter((w) => w.date.slice(0, 10) === key).length;
+    }
+    const checkins = app.checkins.filter((ci) => myIds.has(ci.clientId) && ci.date.slice(0, 10) === key).length;
+    return { label: dayLabels[(d.getDay() + 6) % 7], total: workouts + checkins };
+  });
+  const maxActivity = Math.max(1, ...activity.map((a) => a.total));
+  const weekTotal = activity.reduce((s, a) => s + a.total, 0);
 
+  const last7 = new Set(week.map((d) => d.toISOString().slice(0, 10)));
+  const checkinsThisWeek = app.checkins.filter((ci) => myIds.has(ci.clientId) && last7.has(ci.date.slice(0, 10))).length;
+  const openReviews = app.kanban.find((c) => c.id === "formcheck")?.cards.length ?? 0;
+
+  const quickActions = [
+    { href: "/dashboard/clients?new=1", label: "Add client", icon: Plus },
+    { href: "/dashboard/program-builder", label: "New program", icon: ClipboardList },
+    { href: "/dashboard/form-builder", label: "Build a form", icon: FileSpreadsheet },
+    { href: "/dashboard/messages", label: "Message", icon: MessageSquare },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* ---- Hero ---- */}
+      <section className="relative overflow-hidden rounded-3xl border border-ink-200/60 bg-gradient-to-br from-brand-600 via-brand-700 to-ink-100 p-6 shadow-glow sm:p-8">
+        <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-orange-500/30 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 left-1/3 h-56 w-56 rounded-full bg-brand-400/20 blur-3xl" />
+        <div className="relative flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5" />
+              {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+            </div>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">
+              {greeting()}, {firstName} 👋
+            </h1>
+            <p className="mt-1.5 max-w-lg text-sm text-white/80">
+              Here&apos;s what&apos;s happening at {business} today.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {quickActions.map((a) => (
+              <Link
+                key={a.href}
+                href={a.href}
+                className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25"
+              >
+                <a.icon className="h-4 w-4" /> {a.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ---- KPIs ---- */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Active clients" value={String(clientCount)} icon={Users} />
-        <StatCard label="Programs" value={String(app.programs.length)} icon={ClipboardList} />
-        <StatCard label="Workouts in library" value={String(app.workouts.length)} icon={Dumbbell} />
-        <StatCard label="Avg. adherence" value={clientCount ? `${avgAdherence}%` : "—"} icon={Activity} />
+        <Kpi label="Active clients" value={String(clientCount)} sub={clientCount ? `${atRisk.length} need attention` : "Add your first client"} icon={Users} gradient="from-brand-500 to-brand-700" />
+        <Kpi label="Programs" value={String(app.programs.length)} sub={`${app.workouts.length} workouts in library`} icon={ClipboardList} gradient="from-violet-500 to-indigo-600" />
+        <Kpi label="Check-ins this week" value={String(checkinsThisWeek)} sub={`${openReviews} open form reviews`} icon={ClipboardCheck} gradient="from-sky-500 to-blue-600" />
+        <Kpi label="Avg. adherence" value={clientCount ? `${avgAdherence}%` : "—"} sub="Across your roster" icon={Activity} gradient="from-accent-500 to-emerald-600" />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      {/* ---- Activity + snapshot ---- */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Weekly activity (themed, dependency-free bar chart) */}
+        <div className="card p-6 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-brand-400" />
+              <h2 className="font-semibold text-ink-900">Weekly activity</h2>
+            </div>
+            <span className="text-sm text-ink-500">{weekTotal} this week</span>
+          </div>
+          {weekTotal === 0 ? (
+            <p className="mt-10 mb-10 text-center text-sm text-ink-400">
+              Activity appears here as clients log workouts and submit check-ins.
+            </p>
+          ) : (
+            <div className="mt-6 flex h-44 items-end justify-between gap-2 sm:gap-4">
+              {activity.map((a, i) => (
+                <div key={i} className="flex h-full flex-1 flex-col items-center gap-2">
+                  <div className="flex w-full flex-1 items-end">
+                    <div
+                      className="w-full rounded-t-lg bg-gradient-to-t from-brand-600 to-orange-400 transition-all duration-500"
+                      style={{ height: `${Math.max(6, (a.total / maxActivity) * 100)}%` }}
+                      title={`${a.total} activity`}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-ink-400">{a.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Coaching snapshot */}
+        <div className="card p-6">
+          <h2 className="font-semibold text-ink-900">Coaching snapshot</h2>
+          <p className="mt-1 text-sm text-ink-500">Roster adherence</p>
+          <div className="mt-2">
+            <AdherenceRing value={avgAdherence} />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-3 text-center">
+              <div className="text-xl font-bold text-ink-900">{todays.length}</div>
+              <div className="text-xs text-ink-500">Sessions today</div>
+            </div>
+            <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-3 text-center">
+              <div className="text-xl font-bold text-ink-900">{checkinsThisWeek}</div>
+              <div className="text-xs text-ink-500">Check-ins (7d)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ---- Schedule + needs attention ---- */}
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Today's schedule */}
         <div className="card p-6 lg:col-span-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-ink-900">Today&apos;s schedule</h2>
-            <Link href="/dashboard/calendar" className="text-sm font-medium text-brand-400 hover:text-brand-400">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-brand-400" />
+              <h2 className="font-semibold text-ink-900">Today&apos;s schedule</h2>
+            </div>
+            <Link href="/dashboard/calendar" className="text-sm font-medium text-brand-400 hover:text-brand-300">
               View calendar
             </Link>
           </div>
@@ -70,7 +219,7 @@ export default function DashboardPage() {
             {todays.map((a) => {
               const c = a.clientId ? getClient(a.clientId) : undefined;
               return (
-                <div key={a.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
+                <div key={a.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3 transition hover:border-brand-500/30 hover:bg-brand-500/5">
                   <div className="flex h-11 w-11 flex-col items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
                     <Calendar className="h-4 w-4" />
                   </div>
@@ -111,7 +260,7 @@ export default function DashboardPage() {
               <Link
                 key={c.id}
                 href={`/dashboard/clients/${c.id}`}
-                className="flex items-center gap-3 rounded-xl border border-ink-100 p-3 transition hover:border-brand-200 hover:bg-brand-50/40"
+                className="flex items-center gap-3 rounded-xl border border-ink-100 p-3 transition hover:border-brand-500/30 hover:bg-brand-500/5"
               >
                 <Avatar initials={c.avatar} size="sm" />
                 <div className="min-w-0 flex-1">
@@ -130,11 +279,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent client progress */}
-      <div className="mt-6 card p-6">
+      {/* ---- Client roster ---- */}
+      <div className="card p-6">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-ink-900">Client roster</h2>
-          <Link href="/dashboard/clients" className="flex items-center gap-1 text-sm font-medium text-brand-400 hover:text-brand-400">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-brand-400" />
+            <h2 className="font-semibold text-ink-900">Client roster</h2>
+          </div>
+          <Link href="/dashboard/clients" className="flex items-center gap-1 text-sm font-medium text-brand-400 hover:text-brand-300">
             All clients <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -181,6 +333,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
