@@ -4,7 +4,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from "react";
 import type {
-  Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
+  Client, Exercise, Workout, Program, MealPlan, Recipe, Conversation, Message,
   Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto, NutritionLog,
   WeightEntry,
 } from "@/lib/data";
@@ -12,18 +12,21 @@ import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
 } from "@/lib/platform";
 import type { SessionUser } from "@/lib/auth/session";
-import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms } from "@/lib/seed-content";
+import { seedExercises, seedWorkouts, seedPrograms, seedRecipes, prebuiltForms } from "@/lib/seed-content";
 import { Toaster } from "@/components/ui/Toaster";
 
 export function uid(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+export type ThemeName = "midnight" | "trainerize";
+
 export interface AppSettings {
   trainerName: string;
   trainerEmail: string;
   businessName: string;
   brandColor: string;
+  theme?: ThemeName;
   profilePhoto?: string;
   brandLogo?: string;
   aiProvider?: "openai" | "anthropic" | "gemini";
@@ -68,6 +71,7 @@ export interface DB {
   workouts: Workout[];
   programs: Program[];
   mealPlans: MealPlan[];
+  recipes: Recipe[];
   conversations: Conversation[];
   appointments: Appointment[];
   kanban: KanbanColumn[];
@@ -104,7 +108,7 @@ const emptyKanban: KanbanColumn[] = [
 ];
 
 const emptyDB: DB = {
-  clients: [], exercises: [], workouts: [], programs: [], mealPlans: [],
+  clients: [], exercises: [], workouts: [], programs: [], mealPlans: [], recipes: [],
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
   formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
@@ -161,6 +165,11 @@ interface AppContextValue extends DB {
   // meal plans
   addMealPlan: (m: Partial<MealPlan>) => MealPlan;
   removeMealPlan: (id: string) => void;
+  // recipes (master meals library)
+  addRecipe: (r: Partial<Recipe>) => Recipe;
+  updateRecipe: (id: string, patch: Partial<Recipe>) => void;
+  removeRecipe: (id: string) => void;
+  duplicateRecipe: (id: string) => Recipe | null;
   // messaging
   sendMessage: (clientId: string, text: string, fromClient: boolean) => void;
   // appointments
@@ -208,6 +217,8 @@ interface AppContextValue extends DB {
   addBroadcast: (title: string, audience: string) => void;
   // settings
   updateSettings: (patch: Partial<AppSettings>) => void;
+  // theme (per-device + persisted in settings for staff)
+  setTheme: (theme: ThemeName) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -255,7 +266,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // staff poll a little slower (they're the writers).
   useEffect(() => {
     if (!hydrated || !session) return;
-    const interval = session.role === "member" ? 5000 : 10000;
+    const interval = session.role === "member" ? 4000 : 6000;
     const id = window.setInterval(refresh, interval);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
@@ -311,9 +322,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }).catch(() => {
         /* will retry on next change */
       });
-    }, 600);
+    }, 250);
     return () => clearTimeout(t);
   }, [db, hydrated, session]);
+
+  // Apply the theme once the workspace has hydrated: prefer this device's saved
+  // choice, otherwise fall back to the workspace's stored theme. This runs once
+  // (on hydrate) so periodic refreshes never clobber a local theme pick.
+  useEffect(() => {
+    if (!hydrated) return;
+    let theme: ThemeName = "midnight";
+    try {
+      const ls = localStorage.getItem("ffkc-theme") as ThemeName | null;
+      theme = ls ?? (dbRef.current.settings.theme as ThemeName) ?? "midnight";
+      localStorage.setItem("ffkc-theme", theme);
+    } catch {
+      theme = (dbRef.current.settings.theme as ThemeName) ?? "midnight";
+    }
+    if (typeof document !== "undefined") document.documentElement.dataset.theme = theme;
+  }, [hydrated]);
 
   const signOut = useCallback(async () => {
     try {
@@ -344,6 +371,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       exercises: seedExercises,
       workouts: seedWorkouts,
       programs: seedPrograms,
+      recipes: seedRecipes,
       forms: prebuiltForms,
     }));
   }, []);
@@ -491,6 +519,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const removeMealPlan = useCallback((id: string) =>
     setDb((d) => ({ ...d, mealPlans: d.mealPlans.filter((m) => m.id !== id) })), []);
+
+  /* ----- recipes (master meals library) ----- */
+  const addRecipe = useCallback((r: Partial<Recipe>): Recipe => {
+    const now = new Date().toISOString();
+    const recipe: Recipe = {
+      id: uid("rcp"), name: r.name ?? "New Recipe",
+      mealTypes: r.mealTypes?.length ? r.mealTypes : ["Lunch"],
+      calories: r.calories ?? 0,
+      protein: r.protein, carbs: r.carbs, fat: r.fat, servings: r.servings ?? 1,
+      photo: r.photo, ingredients: r.ingredients ?? [], instructions: r.instructions,
+      createdBy: r.createdBy ?? dbRef.current.settings.businessName,
+      createdAt: r.createdAt ?? now, updatedAt: r.updatedAt ?? now,
+    };
+    setDb((d) => ({ ...d, recipes: [recipe, ...d.recipes] }));
+    return recipe;
+  }, []);
+  const updateRecipe = useCallback((id: string, patch: Partial<Recipe>) =>
+    setDb((d) => ({
+      ...d,
+      recipes: d.recipes.map((r) => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r)),
+    })), []);
+  const removeRecipe = useCallback((id: string) =>
+    setDb((d) => ({ ...d, recipes: d.recipes.filter((r) => r.id !== id) })), []);
+  const duplicateRecipe = useCallback((id: string): Recipe | null => {
+    const src = dbRef.current.recipes.find((r) => r.id === id);
+    if (!src) return null;
+    const now = new Date().toISOString();
+    const copy: Recipe = { ...src, id: uid("rcp"), name: `${src.name} (copy)`, createdAt: now, updatedAt: now };
+    setDb((d) => ({ ...d, recipes: [copy, ...d.recipes] }));
+    return copy;
+  }, []);
 
   /* ----- messaging ----- */
   const sendMessage = useCallback((clientId: string, text: string, fromClient: boolean) => {
@@ -770,6 +829,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateSettings = useCallback((patch: Partial<AppSettings>) =>
     setDb((d) => ({ ...d, settings: { ...d.settings, ...patch } })), []);
 
+  /* ----- theme ----- */
+  const setTheme = useCallback((theme: ThemeName) => {
+    try { localStorage.setItem("ffkc-theme", theme); } catch { /* ignore */ }
+    if (typeof document !== "undefined") document.documentElement.dataset.theme = theme;
+    setDb((d) => ({ ...d, settings: { ...d.settings, theme } }));
+  }, []);
+
   const value = useMemo<AppContextValue>(() => ({
     ...db, hydrated, session, signOut,
     toasts, notify, dismissToast,
@@ -780,6 +846,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addWorkout, updateWorkout, removeWorkout, duplicateWorkout,
     addProgram, removeProgram,
     addMealPlan, removeMealPlan,
+    addRecipe, updateRecipe, removeRecipe, duplicateRecipe,
     sendMessage,
     addAppointment, removeAppointment,
     addCard, moveCard, removeCard,
@@ -791,18 +858,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser,
     addBroadcast,
-    updateSettings,
+    updateSettings, setTheme,
   }), [
     db, hydrated, session, signOut, toasts, notify, dismissToast,
     set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
     setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout, duplicateWorkout,
-    addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
+    addProgram, removeProgram, addMealPlan, removeMealPlan,
+    addRecipe, updateRecipe, removeRecipe, duplicateRecipe, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, assignWorkoutToClients, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
-    addUser, updateUser, removeUser, addBroadcast, updateSettings,
+    addUser, updateUser, removeUser, addBroadcast, updateSettings, setTheme,
   ]);
 
   return (

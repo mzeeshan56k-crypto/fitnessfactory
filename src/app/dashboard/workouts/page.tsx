@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   Plus, Dumbbell, Layers, Library, Clock, Search, Play, Users, Trash2,
   Loader2, Tag, Copy, ChevronRight, Check, FolderOpen, Hash, X,
-  ArrowUpDown, ListChecks, Video as VideoIcon,
+  ArrowUpDown, ListChecks, Video as VideoIcon, UtensilsCrossed, Flame, Pencil,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
@@ -15,14 +15,18 @@ import { WorkoutThumb } from "@/components/ui/WorkoutThumb";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { DataControls } from "@/components/dashboard/DataControls";
 import { Avatar } from "@/components/ui/Avatar";
-import type { Workout } from "@/lib/data";
+import type { Workout, Recipe, MealType } from "@/lib/data";
 import { useApp, useMyClients } from "@/lib/store";
 import { cn, shortDate } from "@/lib/utils";
+import { posterFor } from "@/lib/media";
 
-type Tab = "workouts" | "exercises" | "programs";
+type Tab = "workouts" | "exercises" | "meals" | "programs";
 type SortKey = "name" | "recent" | "duration";
+type RecipeSortKey = "recent" | "name" | "calories";
 
 const NO_TAGS = "__none__";
+const ALL_MEALS = "All";
+const MEAL_TYPES: MealType[] = ["Breakfast", "Lunch", "Dinner", "Snacks"];
 
 const exerciseTypes = ["All", "Strength", "Cardio", "Mobility", "Core"] as const;
 const difficulties = ["Beginner", "Intermediate", "Advanced"] as const;
@@ -92,6 +96,16 @@ export default function MasterLibrariesPage() {
   const [tagInput, setTagInput] = useState("");
   const [assignClients, setAssignClients] = useState<Set<string>>(new Set());
 
+  // Meals state
+  const [mealFilter, setMealFilter] = useState<string>(ALL_MEALS); // All | Breakfast | …
+  const [recipeSort, setRecipeSort] = useState<RecipeSortKey>("recent");
+  const [recipeModal, setRecipeModal] = useState(false);
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
+  const [rForm, setRForm] = useState({
+    name: "", calories: "", protein: "", carbs: "", fat: "", servings: "1",
+    mealTypes: new Set<MealType>(["Lunch"]), photo: "", ingredients: "", instructions: "",
+  });
+
   // --- Tag folders (derived from workout usage) ---
   const tagCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -142,6 +156,31 @@ export default function MasterLibrariesPage() {
       return matchesType && matchesQuery;
     });
   }, [app.exercises, typeFilter, query]);
+
+  // --- Meal-type folders + filtered/sorted recipes ---
+  const mealCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of MEAL_TYPES) counts.set(t, 0);
+    for (const r of app.recipes) for (const t of r.mealTypes) counts.set(t, (counts.get(t) ?? 0) + 1);
+    return counts;
+  }, [app.recipes]);
+
+  const visibleRecipes = useMemo(() => {
+    let list = app.recipes.filter((r) => {
+      if (mealFilter !== ALL_MEALS && !r.mealTypes.includes(mealFilter as MealType)) return false;
+      if (query.trim()) {
+        const q = query.toLowerCase();
+        if (!r.name.toLowerCase().includes(q) && !r.mealTypes.join(" ").toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+    list = [...list].sort((a, b) => {
+      if (recipeSort === "name") return a.name.localeCompare(b.name);
+      if (recipeSort === "calories") return a.calories - b.calories;
+      return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+    });
+    return list;
+  }, [app.recipes, mealFilter, query, recipeSort]);
 
   if (!app.hydrated) {
     return (
@@ -207,6 +246,57 @@ export default function MasterLibrariesPage() {
     app.notify("Exercise added to library");
   }
 
+  /* ----- recipe flows ----- */
+  function openNewRecipe() {
+    setEditingRecipeId(null);
+    setRForm({
+      name: "", calories: "", protein: "", carbs: "", fat: "", servings: "1",
+      mealTypes: new Set<MealType>(mealFilter !== ALL_MEALS ? [mealFilter as MealType] : ["Lunch"]),
+      photo: "", ingredients: "", instructions: "",
+    });
+    setRecipeModal(true);
+  }
+  function openEditRecipe(r: Recipe) {
+    setEditingRecipeId(r.id);
+    setRForm({
+      name: r.name, calories: String(r.calories), protein: r.protein != null ? String(r.protein) : "",
+      carbs: r.carbs != null ? String(r.carbs) : "", fat: r.fat != null ? String(r.fat) : "",
+      servings: String(r.servings ?? 1), mealTypes: new Set(r.mealTypes),
+      photo: r.photo ?? "", ingredients: (r.ingredients ?? []).join(", "), instructions: r.instructions ?? "",
+    });
+    setRecipeModal(true);
+  }
+  function toggleRecipeMealType(t: MealType) {
+    setRForm((s) => {
+      const next = new Set(s.mealTypes);
+      next.has(t) ? next.delete(t) : next.add(t);
+      return { ...s, mealTypes: next };
+    });
+  }
+  function submitRecipe() {
+    if (!rForm.name.trim()) return;
+    const payload: Partial<Recipe> = {
+      name: rForm.name.trim(),
+      calories: Number(rForm.calories) || 0,
+      protein: rForm.protein ? Number(rForm.protein) : undefined,
+      carbs: rForm.carbs ? Number(rForm.carbs) : undefined,
+      fat: rForm.fat ? Number(rForm.fat) : undefined,
+      servings: Number(rForm.servings) || 1,
+      mealTypes: rForm.mealTypes.size ? [...rForm.mealTypes] : ["Lunch"],
+      photo: rForm.photo.trim() || undefined,
+      ingredients: rForm.ingredients.split(",").map((i) => i.trim()).filter(Boolean),
+      instructions: rForm.instructions.trim() || undefined,
+    };
+    if (editingRecipeId) {
+      app.updateRecipe(editingRecipeId, payload);
+      app.notify("Recipe updated");
+    } else {
+      app.addRecipe(payload);
+      app.notify(`Added “${payload.name}” to meals`);
+    }
+    setRecipeModal(false);
+  }
+
   /* ----- bulk actions ----- */
   function bulkDuplicate() {
     selected.forEach((id) => app.duplicateWorkout(id));
@@ -241,6 +331,7 @@ export default function MasterLibrariesPage() {
   const tabMeta: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }>; count: number }[] = [
     { id: "workouts", label: "Workouts", icon: Dumbbell, count: app.workouts.length },
     { id: "exercises", label: "Exercises", icon: Library, count: app.exercises.length },
+    { id: "meals", label: "Meals", icon: UtensilsCrossed, count: app.recipes.length },
     { id: "programs", label: "Programs", icon: Layers, count: app.programs.length },
   ];
 
@@ -257,6 +348,10 @@ export default function MasterLibrariesPage() {
           ) : tab === "exercises" ? (
             <button className="btn-primary" onClick={() => setExerciseModal(true)}>
               <Plus className="h-4 w-4" /> Add exercise
+            </button>
+          ) : tab === "meals" ? (
+            <button className="btn-primary" onClick={openNewRecipe}>
+              <Plus className="h-4 w-4" /> New recipe
             </button>
           ) : (
             <button className="btn-primary" onClick={() => setProgramModal(true)}>
@@ -324,6 +419,25 @@ export default function MasterLibrariesPage() {
                 </div>
               </>
             )}
+
+            {/* Meal-type folders — only for meals */}
+            {tab === "meals" && (
+              <div className="mt-3 border-t border-ink-100 pt-3">
+                <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Meal type</p>
+                <div className="space-y-1">
+                  <FolderRow
+                    label="All meals" count={app.recipes.length} icon={FolderOpen}
+                    active={mealFilter === ALL_MEALS} onClick={() => setMealFilter(ALL_MEALS)}
+                  />
+                  {MEAL_TYPES.map((t) => (
+                    <FolderRow
+                      key={t} label={t} count={mealCounts.get(t) ?? 0} icon={UtensilsCrossed}
+                      active={mealFilter === t} onClick={() => setMealFilter(t)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -356,6 +470,22 @@ export default function MasterLibrariesPage() {
                     <option value="duration">Duration</option>
                   </select>
                 </div>
+              </div>
+            )}
+
+            {tab === "meals" && (
+              <div className="relative">
+                <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                <select
+                  value={recipeSort}
+                  onChange={(e) => setRecipeSort(e.target.value as RecipeSortKey)}
+                  className="input w-auto pl-9 pr-8"
+                  aria-label="Sort recipes"
+                >
+                  <option value="recent">Last modified</option>
+                  <option value="name">Name (A–Z)</option>
+                  <option value="calories">Calories</option>
+                </select>
               </div>
             )}
 
@@ -468,7 +598,7 @@ export default function MasterLibrariesPage() {
                         </button>
 
                         <Link href={`/dashboard/workouts/${w.id}`} className="h-12 w-12 shrink-0">
-                          <WorkoutThumb workout={w} className="h-12 w-12" showPlay={!!w.video} />
+                          <WorkoutThumb workout={w} className="h-12 w-12" showPlay={!!w.video} paused />
                         </Link>
 
                         <Link href={`/dashboard/workouts/${w.id}`} className="min-w-0 flex-1">
@@ -526,7 +656,7 @@ export default function MasterLibrariesPage() {
             ) : filteredExercises.length === 0 ? (
               <div className="card p-12 text-center text-sm text-ink-400">No exercises match your search.</div>
             ) : (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {filteredExercises.map((ex) => (
                   <div key={ex.id} className="card group/card overflow-hidden">
                     <button
@@ -536,7 +666,7 @@ export default function MasterLibrariesPage() {
                       disabled={!ex.video}
                       className="group/play relative block h-28 w-full"
                     >
-                      <ExerciseAnimation name={ex.name} pattern={ex.pattern} className="h-full w-full" />
+                      <ExerciseAnimation name={ex.name} pattern={ex.pattern} className="h-full w-full" paused />
                       {ex.video && (
                         <span className="absolute inset-0 flex items-center justify-center bg-ink-950/30 opacity-0 transition group-hover/play:opacity-100">
                           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-600 text-white">
@@ -559,6 +689,69 @@ export default function MasterLibrariesPage() {
                       </div>
                       <p className="mt-0.5 truncate text-xs text-ink-500">{ex.muscle} · {ex.equipment}</p>
                       <span className={cn("badge mt-2", difficultyClasses(ex.level))}>{ex.level}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* ===== Meals ===== */}
+          {tab === "meals" && (
+            app.recipes.length === 0 ? (
+              <div className="card p-6">
+                <EmptyState
+                  icon={UtensilsCrossed}
+                  title="No recipes yet"
+                  description="Add your first recipe, or load the starter content for a ready-made meals library."
+                  action={
+                    <div className="flex flex-wrap justify-center gap-3">
+                      <button className="btn-primary" onClick={openNewRecipe}>
+                        <Plus className="h-4 w-4" /> New recipe
+                      </button>
+                      <DataControls />
+                    </div>
+                  }
+                />
+              </div>
+            ) : visibleRecipes.length === 0 ? (
+              <div className="card p-12 text-center text-sm text-ink-400">No recipes match your filters.</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleRecipes.map((r) => (
+                  <div key={r.id} className="card group/recipe overflow-hidden">
+                    <button type="button" onClick={() => openEditRecipe(r)} className="relative block h-40 w-full text-left">
+                      {r.photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={r.photo} alt={r.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br text-white/70", posterFor(r.name))}>
+                          <UtensilsCrossed className="h-10 w-10" />
+                        </div>
+                      )}
+                      <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-ink-950/55 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+                        <Flame className="h-3 w-3" /> {r.calories}
+                      </span>
+                    </button>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <button type="button" onClick={() => openEditRecipe(r)} className="min-w-0 flex-1 text-left">
+                          <h3 className="truncate font-semibold text-ink-900">{r.name}</h3>
+                        </button>
+                        <div className="flex shrink-0 gap-1 opacity-0 transition group-hover/recipe:opacity-100">
+                          <button onClick={() => openEditRecipe(r)} aria-label={`Edit ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-brand-500/15 hover:text-brand-400">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => { const c = app.duplicateRecipe(r.id); if (c) app.notify(`Duplicated “${r.name}”`); }} aria-label={`Duplicate ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-700">
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => { app.removeRecipe(r.id); app.notify(`Removed “${r.name}”`, "info"); }} aria-label={`Delete ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-ink-500">{r.mealTypes.join(", ")}</p>
+                      <p className="mt-2 text-xs font-medium text-ink-400">{r.calories} Cal / Serving</p>
                     </div>
                   </div>
                 ))}
@@ -794,6 +987,61 @@ export default function MasterLibrariesPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Recipe create / edit modal */}
+      <Modal
+        open={recipeModal} onClose={() => setRecipeModal(false)}
+        title={editingRecipeId ? "Edit recipe" : "New recipe"} size="lg"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setRecipeModal(false)}>Cancel</button>
+            <button className="btn-primary" onClick={submitRecipe} disabled={!rForm.name.trim()}>
+              {editingRecipeId ? "Save changes" : "Add recipe"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Recipe name">
+            <input className="input" value={rForm.name} onChange={(e) => setRForm((s) => ({ ...s, name: e.target.value }))} placeholder="Mediterranean Breakfast Pita" autoFocus />
+          </Field>
+          <div>
+            <span className="label">Meal type</span>
+            <div className="flex flex-wrap gap-2">
+              {MEAL_TYPES.map((t) => {
+                const on = rForm.mealTypes.has(t);
+                return (
+                  <button
+                    key={t} type="button" onClick={() => toggleRecipeMealType(t)}
+                    className={cn(
+                      "rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
+                      on ? "bg-brand-600 text-white" : "border border-ink-200 bg-ink-100 text-ink-600 hover:border-ink-300",
+                    )}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+            <Field label="Calories"><input type="number" className="input" value={rForm.calories} onChange={(e) => setRForm((s) => ({ ...s, calories: e.target.value }))} /></Field>
+            <Field label="Protein (g)"><input type="number" className="input" value={rForm.protein} onChange={(e) => setRForm((s) => ({ ...s, protein: e.target.value }))} /></Field>
+            <Field label="Carbs (g)"><input type="number" className="input" value={rForm.carbs} onChange={(e) => setRForm((s) => ({ ...s, carbs: e.target.value }))} /></Field>
+            <Field label="Fat (g)"><input type="number" className="input" value={rForm.fat} onChange={(e) => setRForm((s) => ({ ...s, fat: e.target.value }))} /></Field>
+            <Field label="Servings"><input type="number" className="input" value={rForm.servings} onChange={(e) => setRForm((s) => ({ ...s, servings: e.target.value }))} /></Field>
+          </div>
+          <Field label="Ingredients (comma-separated)">
+            <input className="input" value={rForm.ingredients} onChange={(e) => setRForm((s) => ({ ...s, ingredients: e.target.value }))} placeholder="Pita, Egg whites, Feta, Spinach, Tomato" />
+          </Field>
+          <Field label="Instructions">
+            <textarea rows={3} className="input resize-none" value={rForm.instructions} onChange={(e) => setRForm((s) => ({ ...s, instructions: e.target.value }))} placeholder="How to prepare this meal…" />
+          </Field>
+          <Field label="Photo URL (optional)">
+            <input className="input" value={rForm.photo} onChange={(e) => setRForm((s) => ({ ...s, photo: e.target.value }))} placeholder="https://…/photo.jpg" />
+          </Field>
+        </div>
       </Modal>
 
       <VideoModal open={!!video} onClose={() => setVideo(null)} src={video?.src ?? ""} title={video?.title} />

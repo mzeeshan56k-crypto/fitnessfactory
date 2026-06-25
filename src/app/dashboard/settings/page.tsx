@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import {
   User, Building2, CreditCard, Bell, Palette, Database,
-  Check, Sparkles, KeyRound,
+  Check, Sparkles, KeyRound, SunMoon, Moon, Sun,
 } from "lucide-react";
+import type { ThemeName } from "@/lib/store";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { ImageUpload } from "@/components/ui/ImageUpload";
@@ -13,16 +14,34 @@ import { useApp } from "@/lib/store";
 import { AI_MODELS } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 
-type TabId = "profile" | "business" | "ai" | "billing" | "notifications" | "branding" | "data";
+type TabId = "profile" | "business" | "appearance" | "ai" | "billing" | "notifications" | "branding" | "data";
 
 const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "profile", label: "Profile", icon: User },
   { id: "business", label: "Business", icon: Building2 },
+  { id: "appearance", label: "Appearance", icon: SunMoon },
   { id: "ai", label: "AI Copilot", icon: Sparkles },
   { id: "billing", label: "Billing", icon: CreditCard },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "branding", label: "Branding", icon: Palette },
   { id: "data", label: "Data", icon: Database },
+];
+
+const THEME_OPTIONS: {
+  id: ThemeName;
+  label: string;
+  desc: string;
+  icon: React.ComponentType<{ className?: string }>;
+  swatch: string[]; // page, card, brand, accent, text
+}[] = [
+  {
+    id: "midnight", label: "Midnight", desc: "The signature dark theme with a bold red accent.",
+    icon: Moon, swatch: ["#0a0a0a", "#141414", "#f23030", "#10b981", "#fafafa"],
+  },
+  {
+    id: "trainerize", label: "Trainerize Light", desc: "A clean, bright theme with a blue accent — like Trainerize.",
+    icon: Sun, swatch: ["#f3f5f7", "#ffffff", "#1b82f5", "#14b8a6", "#0f172a"],
+  },
 ];
 
 const brandColors = [
@@ -95,6 +114,14 @@ export default function SettingsPage() {
 
   const [profileSaved, setProfileSaved] = useState(false);
   const [businessSaved, setBusinessSaved] = useState(false);
+
+  // Active theme — read from the DOM (source of truth) so it stays correct
+  // even on member devices where settings sync can't persist a theme pick.
+  const [activeTheme, setActiveTheme] = useState<ThemeName>("midnight");
+  useEffect(() => {
+    const t = (document.documentElement.dataset.theme as ThemeName) || app.settings.theme || "midnight";
+    setActiveTheme(t === "trainerize" ? "trainerize" : "midnight");
+  }, [app.settings.theme]);
 
   // Deep link: /dashboard/settings?tab=ai
   useEffect(() => {
@@ -286,6 +313,66 @@ export default function SettingsPage() {
                 <SavedPill show={businessSaved} />
                 <button type="button" className="btn-primary" onClick={saveBusiness}>Save changes</button>
               </div>
+            </div>
+          )}
+
+          {tab === "appearance" && (
+            <div>
+              <h2 className="font-semibold text-ink-900">Appearance</h2>
+              <p className="text-sm text-ink-500">
+                Choose how the whole platform looks. Your choice applies instantly and is saved on this device.
+              </p>
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                {THEME_OPTIONS.map((opt) => {
+                  const active = activeTheme === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => { app.setTheme(opt.id); setActiveTheme(opt.id); }}
+                      className={cn(
+                        "group relative overflow-hidden rounded-2xl border p-4 text-left transition",
+                        active ? "border-brand-500 ring-2 ring-brand-500/30" : "border-ink-200 hover:border-ink-300",
+                      )}
+                    >
+                      {/* Mini preview */}
+                      <div
+                        className="flex h-24 w-full items-stretch gap-2 rounded-xl p-2.5"
+                        style={{ backgroundColor: opt.swatch[0] }}
+                      >
+                        <div className="flex w-16 flex-col gap-1.5 rounded-lg p-1.5" style={{ backgroundColor: opt.swatch[1] }}>
+                          <span className="h-2 w-full rounded-full" style={{ backgroundColor: opt.swatch[2] }} />
+                          <span className="h-1.5 w-3/4 rounded-full" style={{ backgroundColor: opt.swatch[4], opacity: 0.4 }} />
+                          <span className="h-1.5 w-2/3 rounded-full" style={{ backgroundColor: opt.swatch[4], opacity: 0.25 }} />
+                        </div>
+                        <div className="flex flex-1 flex-col gap-1.5 rounded-lg p-1.5" style={{ backgroundColor: opt.swatch[1] }}>
+                          <span className="h-3 w-1/2 rounded-full" style={{ backgroundColor: opt.swatch[4], opacity: 0.85 }} />
+                          <div className="mt-auto flex gap-1.5">
+                            <span className="h-5 flex-1 rounded-md" style={{ backgroundColor: opt.swatch[2] }} />
+                            <span className="h-5 w-8 rounded-md" style={{ backgroundColor: opt.swatch[3] }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <opt.icon className="h-4 w-4 text-ink-500" />
+                        <span className="font-semibold text-ink-900">{opt.label}</span>
+                        {active && (
+                          <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-brand-400">
+                            <Check className="h-3.5 w-3.5" /> Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-ink-500">{opt.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="mt-4 text-xs text-ink-400">
+                Tip: you can also switch themes any time from the toggle in the top bar.
+              </p>
             </div>
           )}
 

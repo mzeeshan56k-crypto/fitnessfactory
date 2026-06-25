@@ -5,6 +5,7 @@ import { Bell, Plus, Menu } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { PortalSwitcher } from "@/components/PortalSwitcher";
 import { AskAIButton } from "@/components/AIAssistant";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useApp } from "@/lib/store";
 
 function initialsOf(name: string) {
@@ -34,6 +35,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       </div>
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
         <PortalSwitcher />
+        <ThemeToggle />
         <Link href="/dashboard/clients?new=1" className="btn-primary hidden sm:inline-flex">
           <Plus className="h-4 w-4" /> Add client
         </Link>

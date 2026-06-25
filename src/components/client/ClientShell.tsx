@@ -11,6 +11,7 @@ import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
 import { PortalSwitcher } from "@/components/PortalSwitcher";
 import { AskAIButton } from "@/components/AIAssistant";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const navToday = { href: "/client", label: "Today", icon: Home };
@@ -56,6 +57,7 @@ export function ClientShell({
           <Logo />
           <div className="flex items-center gap-3">
             <AskAIButton compact />
+            <ThemeToggle />
             <PortalSwitcher compact />
             <span className="hidden text-sm font-medium text-ink-600 sm:block">
               {clientName}

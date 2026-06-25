@@ -1,6 +1,6 @@
 // Pre-built content library: exercises (with animation patterns), workouts,
 // program templates and coach forms. Populated fully by the seed-content build.
-import type { Exercise, Workout, Program } from "@/lib/data";
+import type { Exercise, Workout, Program, Recipe } from "@/lib/data";
 import type { CoachForm } from "@/lib/store";
 
 /* -------------------------------------------------------------------------- */
@@ -408,3 +408,61 @@ export const prebuiltForms: CoachForm[] = [
     ],
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/*  Recipes — the master meals library (Trainerize-style). Calories are per     */
+/*  serving. Photos are intentionally omitted; the UI shows a clean icon tile.  */
+/* -------------------------------------------------------------------------- */
+
+type RawRecipe = Omit<Recipe, "id" | "createdBy" | "createdAt" | "updatedAt"> & { id: string };
+
+const rawSeedRecipes: RawRecipe[] = [
+  { id: "rcp_med_pita", name: "Mediterranean Breakfast Pita", mealTypes: ["Breakfast"], calories: 450, protein: 24, carbs: 48, fat: 18 },
+  { id: "rcp_hash_omelette", name: "Hash Brown Omelette", mealTypes: ["Breakfast"], calories: 414, protein: 22, carbs: 30, fat: 22 },
+  { id: "rcp_texas_omelette", name: "Texas Omelette Sandwich", mealTypes: ["Breakfast"], calories: 530, protein: 29, carbs: 41, fat: 27 },
+  { id: "rcp_cottage_crepes", name: "Cottage Crepes", mealTypes: ["Breakfast"], calories: 406, protein: 28, carbs: 40, fat: 12 },
+  { id: "rcp_potato_egg_wrap", name: "Potato Egg Wrap", mealTypes: ["Breakfast", "Lunch", "Dinner"], calories: 451, protein: 20, carbs: 52, fat: 17 },
+  { id: "rcp_omelette_quesadilla", name: "Omelette Quesadilla", mealTypes: ["Breakfast", "Lunch", "Dinner"], calories: 456, protein: 26, carbs: 34, fat: 24 },
+
+  { id: "rcp_chimichurri_chicken", name: "Chimichurri Chicken With Couscous Bowl", mealTypes: ["Lunch", "Dinner"], calories: 512, protein: 42, carbs: 45, fat: 16 },
+  { id: "rcp_caprese_pasta", name: "Caprese Chicken Pasta Salad Bowl", mealTypes: ["Lunch", "Dinner"], calories: 536, protein: 38, carbs: 52, fat: 18 },
+  { id: "rcp_asian_noodle", name: "Asian Noodle Salad", mealTypes: ["Lunch", "Dinner"], calories: 508, protein: 18, carbs: 66, fat: 17 },
+  { id: "rcp_salmon_rice", name: "Salmon With Brown Rice Salad", mealTypes: ["Lunch", "Dinner"], calories: 533, protein: 36, carbs: 44, fat: 22 },
+  { id: "rcp_pineapple_shrimp", name: "Pineapple Shrimp Bowl", mealTypes: ["Lunch", "Dinner"], calories: 494, protein: 34, carbs: 55, fat: 12 },
+  { id: "rcp_creamy_spinach_chicken", name: "Creamy Spinach Chicken", mealTypes: ["Lunch", "Dinner"], calories: 548, protein: 45, carbs: 14, fat: 34 },
+  { id: "rcp_tuna_crispy_rice", name: "Tuna Salad With Crispy Rice", mealTypes: ["Lunch", "Dinner"], calories: 572, protein: 33, carbs: 58, fat: 22 },
+  { id: "rcp_shrimp_udon", name: "Shrimp With Udon Noodles", mealTypes: ["Dinner", "Lunch"], calories: 541, protein: 32, carbs: 64, fat: 16 },
+  { id: "rcp_breaded_chicken", name: "Breaded Chicken With Crunchy Salad", mealTypes: ["Lunch", "Dinner"], calories: 468, protein: 40, carbs: 34, fat: 18 },
+  { id: "rcp_potato_shrimp", name: "Potato Salad With Shrimp", mealTypes: ["Lunch", "Dinner"], calories: 477, protein: 28, carbs: 46, fat: 18 },
+  { id: "rcp_insalata_patate", name: "Insalata Di Patate", mealTypes: ["Lunch", "Dinner"], calories: 512, protein: 14, carbs: 60, fat: 24 },
+  { id: "rcp_quinoa_tofu_soup", name: "Quinoa Soup With Tofu", mealTypes: ["Dinner", "Lunch"], calories: 500, protein: 24, carbs: 58, fat: 18 },
+  { id: "rcp_apple_chicken", name: "Apple Chicken Salad", mealTypes: ["Lunch", "Dinner"], calories: 522, protein: 38, carbs: 40, fat: 22 },
+  { id: "rcp_green_quinoa_tuna", name: "Green Quinoa Tuna Salad", mealTypes: ["Lunch", "Dinner"], calories: 487, protein: 34, carbs: 44, fat: 17 },
+  { id: "rcp_tofu_nuggets", name: "Tofu Nuggets", mealTypes: ["Lunch", "Dinner"], calories: 542, protein: 30, carbs: 48, fat: 24 },
+  { id: "rcp_oriental_chicken", name: "Oriental Chicken Salad", mealTypes: ["Lunch", "Dinner"], calories: 408, protein: 36, carbs: 26, fat: 18 },
+  { id: "rcp_teriyaki_chicken", name: "Teriyaki Chicken With Veggies And Quinoa", mealTypes: ["Lunch", "Dinner"], calories: 550, protein: 44, carbs: 52, fat: 16 },
+  { id: "rcp_salmon_lettuce", name: "Salmon Lettuce Boats", mealTypes: ["Lunch", "Dinner"], calories: 462, protein: 34, carbs: 18, fat: 28 },
+
+  { id: "rcp_rainbow_tuna", name: "Rainbow Tuna Sandwich", mealTypes: ["Lunch", "Dinner", "Breakfast"], calories: 542, protein: 32, carbs: 56, fat: 20 },
+  { id: "rcp_hummus_tuna", name: "Hummus Tuna Sandwich", mealTypes: ["Lunch", "Dinner", "Breakfast"], calories: 532, protein: 34, carbs: 52, fat: 19 },
+  { id: "rcp_cream_cheese_sandwich", name: "Cream Cheese Sandwich", mealTypes: ["Breakfast", "Lunch", "Dinner"], calories: 498, protein: 18, carbs: 54, fat: 24 },
+  { id: "rcp_southern_beans", name: "Southern Beans", mealTypes: ["Lunch", "Dinner"], calories: 577, protein: 26, carbs: 78, fat: 16 },
+  { id: "rcp_creamy_cucumber", name: "Creamy Cucumber Salad", mealTypes: ["Snacks"], calories: 224, protein: 6, carbs: 18, fat: 14 },
+
+  { id: "rcp_choc_cheesecake", name: "Chocolate Cheesecake", mealTypes: ["Snacks"], calories: 246, protein: 8, carbs: 24, fat: 14 },
+  { id: "rcp_choc_pudding", name: "Chocolate Cheesecake Pudding", mealTypes: ["Snacks"], calories: 209, protein: 12, carbs: 22, fat: 8 },
+  { id: "rcp_raspberries", name: "1 Cup Of Raspberries", mealTypes: ["Breakfast", "Lunch", "Dinner", "Snacks"], calories: 64, protein: 1, carbs: 15, fat: 1 },
+  { id: "rcp_blueberries", name: "1 Cup Of Blueberries", mealTypes: ["Breakfast", "Lunch", "Dinner", "Snacks"], calories: 83, protein: 1, carbs: 21, fat: 0 },
+  { id: "rcp_strawberries", name: "1 Cup Of Strawberries", mealTypes: ["Breakfast", "Lunch", "Dinner", "Snacks"], calories: 50, protein: 1, carbs: 12, fat: 0 },
+  { id: "rcp_banana", name: "Medium Banana", mealTypes: ["Breakfast", "Lunch", "Snacks"], calories: 105, protein: 1, carbs: 27, fat: 0 },
+  { id: "rcp_apple", name: "Medium Apple", mealTypes: ["Breakfast", "Lunch", "Snacks"], calories: 95, protein: 0, carbs: 25, fat: 0 },
+];
+
+export const seedRecipes: Recipe[] = rawSeedRecipes.map((r, i) => ({
+  ...r,
+  servings: r.servings ?? 1,
+  ingredients: r.ingredients ?? [],
+  createdBy: "Fitness Factory KC",
+  createdAt: new Date(2025, 4, 1 - i * 4).toISOString(),
+  updatedAt: new Date(2025, 4, 1 - i * 4).toISOString(),
+}));

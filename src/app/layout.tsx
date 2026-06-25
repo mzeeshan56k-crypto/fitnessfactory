@@ -21,8 +21,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Apply the saved theme before first paint to avoid a flash of the wrong theme.
+  const themeInit = `try{var t=localStorage.getItem('ffkc-theme');document.documentElement.dataset.theme=(t==='trainerize'||t==='midnight')?t:'midnight';}catch(e){document.documentElement.dataset.theme='midnight';}`;
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
       <body>
         <AppProvider>{children}</AppProvider>
       </body>

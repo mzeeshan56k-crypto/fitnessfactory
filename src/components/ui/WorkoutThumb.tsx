@@ -14,10 +14,12 @@ export function WorkoutThumb({
   workout,
   className,
   showPlay = true,
+  paused = false,
 }: {
   workout: Workout;
   className?: string;
   showPlay?: boolean;
+  paused?: boolean;
 }) {
   const first = workout.exercises[0];
   const isVideo = !!workout.video;
@@ -52,6 +54,7 @@ export function WorkoutThumb({
       name={first.name}
       pattern={patternFor(first.name)}
       className={cn("h-full w-full", className)}
+      paused={paused}
     />
   );
 }

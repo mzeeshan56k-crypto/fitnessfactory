@@ -35,14 +35,17 @@ export function ExerciseAnimation({
   name,
   pattern,
   className,
+  paused = false,
 }: {
   name: string;
   pattern?: string;
   className?: string;
+  /** Freeze the figure (calmer in dense grids); it resumes on hover. */
+  paused?: boolean;
 }) {
   const p = patternFor(name, pattern);
   return (
-    <div className={cn("relative overflow-hidden rounded-xl bg-gradient-to-br from-ink-100 to-ink-50", className)}>
+    <div className={cn("group/anim relative overflow-hidden rounded-xl bg-gradient-to-br from-ink-100 to-ink-50", paused && "is-paused", className)}>
       <div className="absolute inset-0 bg-grid opacity-30" />
       <svg viewBox="0 0 120 120" className="relative h-full w-full">
         <defs>
@@ -75,6 +78,8 @@ export function ExerciseAnimation({
         .core  { animation-name: coreA; transform-origin: 60px 86px }
         .cardio{ animation-name: runA }
         .mobility { animation-name: bobA }
+        .is-paused .anim { animation-play-state: paused; }
+        .is-paused:hover .anim { animation-play-state: running; }
       `}</style>
     </div>
   );

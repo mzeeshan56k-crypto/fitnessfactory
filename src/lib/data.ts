@@ -91,6 +91,26 @@ export interface MealPlan {
   tag: string;
 }
 
+// A single recipe / meal in the master meals library (Trainerize-style).
+export type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snacks";
+
+export interface Recipe {
+  id: string;
+  name: string;
+  mealTypes: MealType[];
+  calories: number; // per serving
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  servings?: number;
+  photo?: string; // image/data URL; falls back to an icon tile
+  ingredients?: string[];
+  instructions?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Message {
   id: string;
   fromClient: boolean;
