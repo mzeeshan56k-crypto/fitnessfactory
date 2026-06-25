@@ -13,11 +13,9 @@ import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { PhotoCompare } from "@/components/PhotoCompare";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ShareInvite } from "@/components/ui/ShareInvite";
-import { WeightChart, StrengthChart, AdherenceRing } from "@/components/dashboard/Charts";
+import { WeightChart, AdherenceRing } from "@/components/dashboard/Charts";
 import { useApp } from "@/lib/store";
-import {
-  weightTrend, strengthTrend, type ClientStatus,
-} from "@/lib/data";
+import { type ClientStatus } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 const statusBadge: Record<ClientStatus, string> = {

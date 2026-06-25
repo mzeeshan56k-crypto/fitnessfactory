@@ -1,42 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
-  LineChart as LineChartRecharts, Line, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
-} from "recharts";
-import {
-  TrendingDown, Dumbbell, Activity, Flame, Camera, LineChart,
-  Footprints, Droplet, Moon, Utensils, Users, Target, TrendingUp,
+  Activity, Flame, Target, Users, ClipboardCheck, Dumbbell, LineChart, CheckCircle2,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { WeightChart, StrengthChart } from "@/components/dashboard/Charts";
-import { EmptyState, Field } from "@/components/ui/Modal";
+import { Avatar } from "@/components/ui/Avatar";
+import { EmptyState } from "@/components/ui/Modal";
 import { DataControls } from "@/components/dashboard/DataControls";
-import { weightTrend, strengthTrend, habits } from "@/lib/data";
-import type { Exercise } from "@/lib/data";
-import { useApp } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { useApp, useMyClients } from "@/lib/store";
 
-const habitIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  footprints: Footprints,
-  droplet: Droplet,
-  moon: Moon,
-  utensils: Utensils,
-};
-
-const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const photoTiles = [
-  { label: "Week 1", gradient: "from-brand-400 to-brand-600" },
-  { label: "Week 4", gradient: "from-accent-400 to-accent-600" },
-  { label: "Week 8", gradient: "from-amber-400 to-rose-500" },
-  { label: "Week 12", gradient: "from-brand-500 to-accent-500" },
-];
+type Feed = { id: string; type: "workout" | "checkin"; date: string; clientName: string; avatar: string; label: string };
 
 export default function ProgressPage() {
   const app = useApp();
+  const clients = useMyClients();
 
   if (!app.hydrated) {
     return (
@@ -46,303 +25,137 @@ export default function ProgressPage() {
     );
   }
 
-  const clientCount = app.clients.length;
+  const clientCount = clients.length;
   const avgAdherence =
     clientCount > 0
-      ? Math.round(app.clients.reduce((sum, c) => sum + (c.adherence ?? 0), 0) / clientCount)
+      ? Math.round(clients.reduce((s, c) => s + (c.adherence ?? 0), 0) / clientCount)
       : 0;
+  const myIds = new Set(clients.map((c) => c.id));
+  const totalWorkouts = clients.reduce((s, c) => s + (app.completions[c.id]?.length ?? 0), 0);
+  const totalCheckins = app.checkins.filter((ci) => myIds.has(ci.clientId)).length;
+
+  // Real, live activity feed across this coach's clients.
+  const feed: Feed[] = [];
+  for (const c of clients) {
+    for (const w of app.completions[c.id] ?? []) {
+      feed.push({ id: w.id, type: "workout", date: w.date, clientName: c.name, avatar: c.avatar, label: w.workoutName });
+    }
+  }
+  for (const ci of app.checkins) {
+    if (!myIds.has(ci.clientId)) continue;
+    const c = clients.find((x) => x.id === ci.clientId);
+    if (c) feed.push({ id: ci.id, type: "checkin", date: ci.date, clientName: c.name, avatar: c.avatar, label: ci.formName || "Check-in" });
+  }
+  feed.sort((a, b) => +new Date(b.date) - +new Date(a.date));
+  const recent = feed.slice(0, 12);
+
+  const roster = [...clients].sort((a, b) => (b.adherence ?? 0) - (a.adherence ?? 0));
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
   return (
     <>
       <PageHeader
         title="Progress"
-        subtitle="Track body stats, strength and habits"
+        subtitle="Live client adherence, sessions and check-ins"
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {app.seeded ? (
-          <>
-            <StatCard label="Total weight lost" value="21 lb" delta="9.8%" icon={TrendingDown} />
-            <StatCard label="Strength gain" value="+45%" delta="45%" icon={Dumbbell} />
-            <StatCard label="Workouts logged" value="1,284" delta="6.4%" icon={Activity} />
-            <StatCard label="Active streak" value="23 days" delta="3 days" icon={Flame} />
-          </>
-        ) : (
-          <>
-            <StatCard label="Active clients" value={String(clientCount)} icon={Users} />
-            <StatCard label="Avg adherence" value={`${avgAdherence}%`} icon={Target} />
-            <StatCard label="Workouts logged" value="0" icon={Activity} />
-            <StatCard label="Active streak" value="0 days" icon={Flame} />
-          </>
-        )}
+        <StatCard label="Active clients" value={String(clientCount)} icon={Users} />
+        <StatCard label="Avg adherence" value={clientCount ? `${avgAdherence}%` : "—"} icon={Target} />
+        <StatCard label="Sessions logged" value={String(totalWorkouts)} icon={Activity} />
+        <StatCard label="Check-ins" value={String(totalCheckins)} icon={ClipboardCheck} />
       </div>
 
-      <StrengthProgressionExplorer exercises={app.exercises} />
-
-      {app.seeded ? (
-        <SeededProgress />
-      ) : (
+      {clientCount === 0 ? (
         <div className="mt-6 space-y-6">
           <EmptyState
             icon={LineChart}
-            title="No progress data yet"
-            description="Charts populate as your clients log workouts and check-ins."
+            title="No client progress yet"
+            description="Add clients and this fills with their real adherence, logged sessions and check-ins as they happen."
+            action={<Link href="/dashboard/clients?new=1" className="btn-primary">Add client</Link>}
           />
           <DataControls variant="card" />
         </div>
-      )}
-    </>
-  );
-}
-
-/* ----------- Strength progression explorer (any exercise) ----------- */
-
-const TOP_LIFTS = ["Squat", "Bench Press", "Bench", "Deadlift", "Overhead Press", "OHP"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** Deterministic hash from a string so each exercise yields a distinct trend. */
-function hashString(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return Math.abs(h);
-}
-
-/** Plausible month-over-month estimated 1RM, derived from exercise id+name. */
-function buildSeries(ex: { id: string; name: string }) {
-  const seed = hashString(`${ex.id}|${ex.name}`);
-  const base = 95 + (seed % 160); // 95–254 lb starting estimate
-  const monthlyGain = 4 + (seed % 11); // 4–14 lb / month nominal
-  const now = new Date();
-  const data: { month: string; oneRm: number }[] = [];
-  let value = base;
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const wobble = (((seed >> (i + 1)) % 7) - 3); // -3..+3 deterministic noise
-    if (i < 5) value += monthlyGain + wobble;
-    data.push({ month: MONTHS[d.getMonth()], oneRm: Math.max(45, Math.round(value)) });
-  }
-  return data;
-}
-
-function StrengthProgressionExplorer({ exercises }: { exercises: Exercise[] }) {
-  const options = useMemo(() => {
-    const top: Exercise[] = [];
-    const rest: Exercise[] = [];
-    exercises.forEach((e) => {
-      if (TOP_LIFTS.some((t) => e.name.toLowerCase() === t.toLowerCase())) top.push(e);
-      else rest.push(e);
-    });
-    return [...top, ...rest];
-  }, [exercises]);
-
-  const [selectedId, setSelectedId] = useState<string>("");
-  const active = options.find((e) => e.id === selectedId) ?? options[0] ?? null;
-
-  if (options.length === 0) {
-    return (
-      <div className="mt-6 card p-6">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-brand-400" />
-          <h2 className="font-semibold text-ink-900">Strength progression by exercise</h2>
-        </div>
-        <div className="mt-4">
-          <EmptyState
-            icon={Dumbbell}
-            title="No exercises yet"
-            description="Add exercises or load starter content to chart strength progression per lift."
-          />
-        </div>
-      </div>
-    );
-  }
-
-  const series = active ? buildSeries(active) : [];
-  const first = series[0]?.oneRm ?? 0;
-  const best = series.length ? Math.max(...series.map((d) => d.oneRm)) : 0;
-  const gainPct = first > 0 ? Math.round(((best - first) / first) * 100) : 0;
-
-  return (
-    <div className="mt-6 card p-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-brand-400" />
-            <h2 className="font-semibold text-ink-900">Strength progression by exercise</h2>
-          </div>
-          <p className="mt-1 text-sm text-ink-500">
-            Estimated 1RM / top set, month over month. Top lifts load first.
-          </p>
-        </div>
-        <div className="w-full sm:w-64">
-          <Field label="Exercise">
-            <select
-              className="input"
-              value={active?.id ?? ""}
-              onChange={(e) => setSelectedId(e.target.value)}
-            >
-              {options.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-6">
-        <div>
-          <div className="eyebrow text-ink-400">Current best</div>
-          <div className="text-2xl font-bold text-ink-900">{best} lb</div>
-        </div>
-        <div>
-          <div className="eyebrow text-ink-400">Gain (6 mo)</div>
-          <div className={cn("text-2xl font-bold", gainPct >= 0 ? "text-accent-400" : "text-brand-400")}>
-            {gainPct >= 0 ? "+" : ""}
-            {gainPct}%
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChartRecharts data={series} margin={{ left: -16, right: 8, top: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eceef2" vertical={false} />
-            <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="#828fa6" />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              fontSize={12}
-              stroke="#828fa6"
-              domain={["dataMin - 10", "dataMax + 10"]}
-              tickFormatter={(v) => `${v}`}
-            />
-            <Tooltip
-              contentStyle={{ borderRadius: 12, border: "1px solid #eceef2", fontSize: 12 }}
-              formatter={(v: number) => [`${v} lb`, "Est. 1RM"]}
-            />
-            <Line type="monotone" dataKey="oneRm" stroke="#1b82f5" strokeWidth={2.5} dot={{ r: 3 }} name="Est. 1RM" />
-          </LineChartRecharts>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-/* ----------- Rich sample visuals — only rendered when seeded ----------- */
-
-function SeededProgress() {
-  return (
-    <>
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="card p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-ink-900">Body weight trend</h2>
-              <p className="text-sm text-ink-500">Actual vs. target over time</p>
+      ) : (
+        <div className="mt-6 grid gap-6 lg:grid-cols-3">
+          {/* Roster progress */}
+          <div className="card p-6 lg:col-span-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-brand-400" />
+                <h2 className="font-semibold text-ink-900">Client roster</h2>
+              </div>
+              <Link href="/dashboard/clients" className="text-sm font-medium text-brand-400 hover:text-brand-300">
+                All clients
+              </Link>
             </div>
-            <div className="flex items-center gap-4 text-xs text-ink-500">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-500" /> Actual</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-ink-300" /> Target</span>
-            </div>
-          </div>
-          <div className="mt-4">
-            <WeightChart data={weightTrend} />
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-ink-900">Strength progression</h2>
-              <p className="text-sm text-ink-500">Top lifts (lb) by month</p>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-ink-500">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-500" /> Squat</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-accent-400" /> Bench</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Deadlift</span>
-            </div>
-          </div>
-          <div className="mt-4">
-            <StrengthChart data={strengthTrend} />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 card p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-ink-900">Habit tracker</h2>
-            <p className="text-sm text-ink-500">Daily consistency this week</p>
-          </div>
-        </div>
-        <div className="mt-4 space-y-2">
-          {habits.map((habit) => {
-            const Icon = habitIcons[habit.icon] ?? Activity;
-            return (
-              <div
-                key={habit.id}
-                className="flex flex-wrap items-center gap-4 rounded-xl border border-ink-100 p-3"
-              >
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/15 text-brand-400">
-                  <Icon className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-ink-900">{habit.name}</div>
-                  <div className="flex items-center gap-1 text-xs text-ink-500">
-                    <Flame className="h-3.5 w-3.5 text-orange-500" /> {habit.streak} day streak
+            <div className="mt-4 space-y-2">
+              {roster.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/dashboard/clients/${c.id}`}
+                  className="flex items-center gap-4 rounded-xl p-3 transition hover:bg-ink-50"
+                >
+                  <Avatar initials={c.avatar} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold text-ink-900">{c.name}</div>
+                    <div className="truncate text-xs text-ink-500">{c.program}</div>
                   </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {habit.weekly.map((done, i) => (
-                    <div key={i} className="flex flex-col items-center gap-1">
-                      <span
-                        className={cn(
-                          "flex h-7 w-7 items-center justify-center rounded-lg text-xs font-semibold",
-                          done
-                            ? "bg-accent-500 text-white"
-                            : "border border-ink-200 bg-ink-50 text-ink-300",
-                        )}
-                      >
-                        {dayLabels[i][0]}
-                      </span>
+                  <div className="hidden w-32 sm:block">
+                    <div className="mb-1 flex justify-between text-xs text-ink-500">
+                      <span>Adherence</span><span className="font-semibold text-ink-700">{c.adherence}%</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                    <div className="h-2 w-full rounded-full bg-ink-100">
+                      <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500" style={{ width: `${c.adherence}%` }} />
+                    </div>
+                  </div>
+                  <div className="hidden w-32 sm:block">
+                    <div className="mb-1 flex justify-between text-xs text-ink-500">
+                      <span>Goal</span><span className="font-semibold text-ink-700">{c.progress}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-ink-100">
+                      <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500" style={{ width: `${c.progress}%` }} />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
 
-      <div className="mt-6 card p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-ink-900">Progress photos</h2>
-            <p className="text-sm text-ink-500">Visual transformation timeline</p>
+          {/* Recent activity feed */}
+          <div className="card p-6">
+            <div className="flex items-center gap-2">
+              <Flame className="h-5 w-5 text-orange-500" />
+              <h2 className="font-semibold text-ink-900">Recent activity</h2>
+            </div>
+            <p className="mt-1 text-sm text-ink-500">Sessions &amp; check-ins as they come in</p>
+            <div className="mt-4 space-y-3">
+              {recent.length === 0 ? (
+                <p className="py-8 text-center text-sm text-ink-400">
+                  No activity yet — it appears the moment a client logs a session or submits a check-in.
+                </p>
+              ) : (
+                recent.map((f) => (
+                  <div key={`${f.type}-${f.id}`} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${f.type === "workout" ? "bg-brand-500/15 text-brand-400" : "bg-accent-500/15 text-accent-400"}`}>
+                      {f.type === "workout" ? <Dumbbell className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-ink-900">{f.clientName}</div>
+                      <div className="truncate text-xs text-ink-500">
+                        {f.type === "workout" ? "Logged" : "Submitted"} {f.label}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs text-ink-400">{fmt(f.date)}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {photoTiles.map((tile) => (
-            <div key={tile.label} className="group">
-              <div
-                className={cn(
-                  "relative flex aspect-[3/4] items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br text-white/90",
-                  tile.gradient,
-                )}
-              >
-                <Camera className="h-9 w-9 opacity-80 transition group-hover:scale-110" />
-                <span className="absolute bottom-3 left-3 badge bg-white/20 text-white backdrop-blur">
-                  {tile.label}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </>
   );
 }

@@ -251,7 +251,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // member see each other's changes almost instantly.
   useEffect(() => {
     if (!hydrated || !session) return;
-    const id = window.setInterval(refresh, 3500);
+    const id = window.setInterval(refresh, 2500);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -634,9 +634,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind: "workout", completion: summary }),
-      }).catch(() => {});
+      })
+        .then(() => refresh())
+        .catch(() => {});
     }
-  }, []);
+  }, [refresh]);
 
   /* ----- progress photos ----- */
   const addPhoto = useCallback((clientId: string, url: string) => {
@@ -684,9 +686,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind: "weight", weight }),
-      }).catch(() => {});
+      })
+        .then(() => refresh())
+        .catch(() => {});
     }
-  }, []);
+  }, [refresh]);
 
   /* ----- trainer assignment (admin) ----- */
   const assignCoach = useCallback((clientId: string, coachEmail: string, coachName: string) =>
