@@ -4,6 +4,7 @@
 //   3. Local JSON file (development only, when nothing is configured)
 import "server-only";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { Redis as UpstashRedis } from "@upstash/redis";
 import IORedis from "ioredis";
@@ -32,8 +33,10 @@ const ioredis =
       (g.__ffkcIORedis = new IORedis(redisUrl, { maxRetriesPerRequest: 3, lazyConnect: false }))
     : null;
 
-// Local dev fallback: a JSON file in the working directory.
-const DEV_FILE = path.join(process.cwd(), ".ffkc-dev-store.json");
+// Local fallback: a JSON file in the OS temp dir (writable on Vercel's /tmp,
+// unlike the read-only project dir). This keeps the app fully functional with
+// zero configuration for testing — data is ephemeral until KV/Redis is set.
+const DEV_FILE = path.join(os.tmpdir(), "ffkc-dev-store.json");
 let warned = false;
 function warnOnce() {
   if (!warned && process.env.NODE_ENV === "production") {

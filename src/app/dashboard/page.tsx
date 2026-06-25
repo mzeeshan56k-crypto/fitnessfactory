@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   Users, Dumbbell, ClipboardList, Activity, ArrowRight, Calendar,
   AlertTriangle, CheckCircle2, Flame, CalendarPlus, Plus, FileSpreadsheet,
-  MessageSquare, Sparkles, TrendingUp, ClipboardCheck,
+  MessageSquare, Sparkles, TrendingUp, ClipboardCheck, Library,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
@@ -140,6 +140,31 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {/* ---- First-run onboarding (empty workspace) ---- */}
+      {clientCount === 0 && app.programs.length === 0 && app.workouts.length === 0 && (
+        <section className="card flex flex-col items-start gap-4 border-brand-500/30 bg-brand-500/5 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500/15 text-brand-400">
+              <Library className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-semibold text-ink-900">Get started in seconds</h2>
+              <p className="mt-0.5 text-sm text-ink-500">
+                Load a ready-made library of exercises, workouts, programs and forms — then add your first client.
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button type="button" onClick={() => app.loadStarterContent()} className="btn-primary">
+              <Library className="h-4 w-4" /> Load starter content
+            </button>
+            <Link href="/dashboard/clients?new=1" className="btn-secondary">
+              <Plus className="h-4 w-4" /> Add client
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* ---- KPIs ---- */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
