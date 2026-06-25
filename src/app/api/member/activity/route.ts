@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kvGet, kvSet } from "@/lib/storage";
 import { getSessionUser } from "@/lib/auth/accounts";
+import { computeAdherence, computeProgress } from "@/lib/metrics";
 
 export const runtime = "nodejs";
 
@@ -17,14 +18,20 @@ interface Photo { id: string; label: string; date: string; url: string }
 interface FoodEntry { id: string; name: string; kcal: number }
 interface NutritionLog { water: number; foodLog: FoodEntry[]; logged: string[] }
 interface WeightEntry { date: string; weight: number }
+interface WsClient {
+  id: string; email: string;
+  currentWeight?: number; startWeight?: number; goalWeight?: number;
+  adherence?: number; progress?: number; lastActive?: string;
+}
 interface Workspace {
-  clients?: { id: string; email: string; currentWeight?: number }[];
+  clients?: WsClient[];
   conversations?: Conversation[];
   checkins?: CheckIn[];
   completions?: Record<string, Completion[]>;
   photos?: Record<string, Photo[]>;
   nutritionLogs?: Record<string, NutritionLog>;
   weightLogs?: Record<string, WeightEntry[]>;
+  clientPlans?: Record<string, { workoutIds?: string[] }>;
   [k: string]: unknown;
 }
 
@@ -103,6 +110,9 @@ export async function POST(req: NextRequest) {
     };
     const all = ws.completions ?? {};
     ws.completions = { ...all, [mine.id]: [completion, ...(all[mine.id] ?? [])] };
+    // Recompute adherence from real logged sessions so the coach sees it live.
+    const adherence = computeAdherence(ws.clientPlans?.[mine.id], ws.completions[mine.id], mine.adherence ?? 0);
+    ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, adherence, lastActive: "Just now" } : c));
   } else if (body.kind === "photo") {
     const p = body.photo ?? {};
     if (!p.url) return NextResponse.json({ error: "Missing photo." }, { status: 400 });
@@ -134,8 +144,20 @@ export async function POST(req: NextRequest) {
     const entry: WeightEntry = { date: new Date().toISOString(), weight };
     const all = ws.weightLogs ?? {};
     ws.weightLogs = { ...all, [mine.id]: [entry, ...(all[mine.id] ?? [])].slice(0, 365) };
-    // Keep the client's headline weight in sync.
-    ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, currentWeight: weight } : c));
+    // Keep the client's headline weight + goal progress in sync, live.
+    ws.clients = (ws.clients ?? []).map((c) =>
+      c.id === mine.id
+        ? {
+            ...c,
+            currentWeight: weight,
+            lastActive: "Just now",
+            progress: computeProgress(
+              { startWeight: c.startWeight ?? 0, currentWeight: weight, goalWeight: c.goalWeight ?? 0 },
+              c.progress ?? 0,
+            ),
+          }
+        : c,
+    );
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

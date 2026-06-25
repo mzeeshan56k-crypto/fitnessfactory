@@ -15,11 +15,21 @@ const config: Config = {
           400: "#34d399", 500: "#10b981", 600: "#059669", 700: "#047857",
           800: "#065f46", 900: "#064e3b",
         },
-        // Inverted neutral scale: low numbers = dark surfaces, high = light text.
+        // Neutral scale driven by CSS variables so the whole UI can flip
+        // between dark (default) and light themes. Low numbers = surfaces,
+        // high numbers = text.
         ink: {
-          50: "#0a0a0a", 100: "#141414", 200: "#2b2b2e", 300: "#3a3a40",
-          400: "#9a9aa3", 500: "#a6a6a6", 600: "#c2c2c8", 700: "#dadadf",
-          800: "#ededf1", 900: "#fafafa", 950: "#ffffff",
+          50: "rgb(var(--ink-50) / <alpha-value>)",
+          100: "rgb(var(--ink-100) / <alpha-value>)",
+          200: "rgb(var(--ink-200) / <alpha-value>)",
+          300: "rgb(var(--ink-300) / <alpha-value>)",
+          400: "rgb(var(--ink-400) / <alpha-value>)",
+          500: "rgb(var(--ink-500) / <alpha-value>)",
+          600: "rgb(var(--ink-600) / <alpha-value>)",
+          700: "rgb(var(--ink-700) / <alpha-value>)",
+          800: "rgb(var(--ink-800) / <alpha-value>)",
+          900: "rgb(var(--ink-900) / <alpha-value>)",
+          950: "rgb(var(--ink-950) / <alpha-value>)",
         },
       },
       fontFamily: {

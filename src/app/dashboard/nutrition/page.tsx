@@ -17,6 +17,15 @@ const macroConfig = [
   { key: "fat" as const, label: "Fat", kcalPerG: 9, color: "bg-amber-500", text: "text-amber-400" },
 ];
 
+// A pleasant gradient "cover" per plan, themed loosely by its tag.
+function planGradient(tag: string) {
+  const t = tag.toLowerCase();
+  if (t.includes("fat") || t.includes("cut") || t.includes("loss")) return "from-rose-500 to-orange-500";
+  if (t.includes("muscle") || t.includes("bulk") || t.includes("gain")) return "from-violet-500 to-indigo-600";
+  if (t.includes("maintain")) return "from-sky-500 to-blue-600";
+  return "from-accent-500 to-emerald-600";
+}
+
 type MealRow = { name: string; kcal: string; items: string };
 const emptyMealRow = (): MealRow => ({ name: "", kcal: "", items: "" });
 
@@ -129,58 +138,59 @@ export default function NutritionPage() {
           />
         </div>
       ) : (
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
-          {/* Meal plan list */}
-          <div className="card p-4 lg:col-span-1">
-            <div className="mb-3 flex items-center justify-between px-1">
-              <h2 className="text-sm font-semibold text-ink-900">Meal plans</h2>
-              <span className="badge bg-ink-100 text-ink-600">{app.mealPlans.length}</span>
-            </div>
-            <div className="space-y-2">
-              {app.mealPlans.map((m) => {
-                const active = selected?.id === m.id;
-                return (
-                  <div
-                    key={m.id}
-                    className={cn(
-                      "flex items-center gap-2 rounded-xl border p-3 transition",
-                      active
-                        ? "border-brand-300 bg-brand-50/60"
-                        : "border-ink-100 hover:border-brand-200 hover:bg-brand-50/30",
-                    )}
-                  >
-                    <button
-                      onClick={() => setSelectedId(m.id)}
-                      className="min-w-0 flex-1 text-left"
-                    >
+        <div className="mt-6 space-y-6">
+          {/* Trainerize-style meal/recipe cards */}
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {app.mealPlans.map((m) => {
+              const active = selected?.id === m.id;
+              return (
+                <div
+                  key={m.id}
+                  className={cn(
+                    "card group relative overflow-hidden transition hover:-translate-y-0.5",
+                    active && "ring-2 ring-brand-500",
+                  )}
+                >
+                  <button onClick={() => setSelectedId(m.id)} className="block w-full text-left">
+                    <div className={cn("relative h-32 bg-gradient-to-br", planGradient(m.tag))}>
+                      <Utensils className="absolute bottom-3 left-4 h-12 w-12 text-white/30" />
+                      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/25 px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur">
+                        <Flame className="h-3 w-3" /> {m.calories.toLocaleString()} kcal
+                      </span>
+                    </div>
+                    <div className="p-4">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-ink-900">{m.name}</span>
-                        <span className="badge bg-brand-500/15 text-brand-400">{m.tag}</span>
+                        <h3 className="truncate font-semibold text-ink-900">{m.name}</h3>
+                        <span className="badge shrink-0 bg-brand-500/15 text-brand-400">{m.tag}</span>
                       </div>
-                      <div className="mt-1 flex items-center gap-1.5 text-xs text-ink-500">
-                        <Flame className="h-3.5 w-3.5" />
-                        {m.calories.toLocaleString()} kcal
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        <span className="rounded-full bg-brand-500/15 px-2.5 py-0.5 text-xs font-medium text-brand-400">P {m.protein}g</span>
+                        <span className="rounded-full bg-accent-500/15 px-2.5 py-0.5 text-xs font-medium text-accent-400">C {m.carbs}g</span>
+                        <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-400">F {m.fat}g</span>
                       </div>
-                    </button>
-                    <button
-                      onClick={() => {
-                        app.removeMealPlan(m.id);
-                        if (selectedId === m.id) setSelectedId(null);
-                      }}
-                      aria-label={`Delete ${m.name}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="mt-3 flex items-center gap-1.5 text-xs text-ink-500">
+                        <Utensils className="h-3.5 w-3.5" /> {m.meals.length} meal{m.meals.length === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      app.removeMealPlan(m.id);
+                      if (selectedId === m.id) setSelectedId(null);
+                    }}
+                    aria-label={`Delete ${m.name}`}
+                    className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-white opacity-0 backdrop-blur transition hover:bg-rose-600 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           {/* Selected plan detail */}
           {selected && (
-            <div className="space-y-6 lg:col-span-2">
+            <div className="space-y-6">
               {/* Macro breakdown */}
               <div className="card p-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">

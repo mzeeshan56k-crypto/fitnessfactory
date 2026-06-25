@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Plus, Dumbbell, Layers, Library, GripVertical, Clock, Search,
-  Play, Users, Trash2, Loader2,
+  Play, Users, Trash2, Loader2, ChevronRight,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
@@ -284,14 +284,14 @@ export default function TrainingPage() {
             }
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Workout list */}
-            <div className="card p-4 lg:col-span-1">
-              <div className="mb-3 flex items-center justify-between px-1">
+          <div className="space-y-6">
+            {/* Clean workout list (Trainerize-style rows) */}
+            <div className="card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
                 <h2 className="text-sm font-semibold text-ink-900">Your workouts</h2>
                 <span className="badge bg-ink-100 text-ink-600">{app.workouts.length}</span>
               </div>
-              <div className="space-y-2">
+              <div className="divide-y divide-ink-100">
                 {app.workouts.map((w) => {
                   const active = selectedWorkout?.id === w.id;
                   return (
@@ -299,30 +299,34 @@ export default function TrainingPage() {
                       key={w.id}
                       onClick={() => setSelectedId(w.id)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition",
-                        active
-                          ? "border-brand-300 bg-brand-50/60"
-                          : "border-ink-100 hover:border-brand-200 hover:bg-brand-50/30",
+                        "flex w-full items-center gap-4 px-4 py-3 text-left transition hover:bg-ink-50",
+                        active && "bg-brand-500/10",
                       )}
                     >
                       <span
                         className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-lg",
-                          active ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-500",
+                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                          active ? "bg-brand-600 text-white" : "bg-brand-500/15 text-brand-400",
                         )}
                       >
                         <Dumbbell className="h-5 w-5" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-ink-900">{w.name}</div>
-                        <div className="flex items-center gap-2 text-xs text-ink-500">
+                        <div className="truncate font-semibold text-ink-900">{w.name}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-500">
                           <span>{w.category}</span>
                           <span>·</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {w.durationMin}m
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" /> est. {w.durationMin} min
                           </span>
+                          <span>·</span>
+                          <span>{w.exercises.length} exercises</span>
                         </div>
                       </div>
+                      <span className={cn("badge hidden sm:inline-flex", difficultyClasses(w.difficulty))}>
+                        {w.difficulty}
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
                     </button>
                   );
                 })}
@@ -331,7 +335,7 @@ export default function TrainingPage() {
 
             {/* Detail / builder panel */}
             {selectedWorkout && (
-              <div className="card p-6 lg:col-span-2">
+              <div className="card p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 pb-4">
                   <div>
                     <div className="flex items-center gap-2">

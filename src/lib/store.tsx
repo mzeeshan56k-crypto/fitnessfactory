@@ -13,6 +13,7 @@ import type {
 } from "@/lib/platform";
 import type { SessionUser } from "@/lib/auth/session";
 import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms } from "@/lib/seed-content";
+import { computeAdherence, computeProgress } from "@/lib/metrics";
 
 export function uid(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -616,10 +617,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const completeWorkout = useCallback((clientId: string, summary: Omit<WorkoutCompletion, "id" | "date">) => {
     const completion: WorkoutCompletion = { id: uid("wc"), date: new Date().toISOString(), ...summary };
-    setDb((d) => ({
-      ...d,
-      completions: { ...d.completions, [clientId]: [completion, ...(d.completions[clientId] ?? [])] },
-    }));
+    setDb((d) => {
+      const list = [completion, ...(d.completions[clientId] ?? [])];
+      const client = d.clients.find((c) => c.id === clientId);
+      const adherence = computeAdherence(d.clientPlans[clientId], list, client?.adherence ?? 0);
+      return {
+        ...d,
+        completions: { ...d.completions, [clientId]: list },
+        // Adherence reflects real logged sessions and updates live.
+        clients: d.clients.map((c) => (c.id === clientId ? { ...c, adherence, lastActive: "Just now" } : c)),
+      };
+    });
     // Members persist via the dedicated endpoint (they can't bulk-save).
     if (sessionRef.current?.role === "member") {
       fetch("/api/member/activity", {
@@ -664,8 +672,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDb((d) => ({
       ...d,
       weightLogs: { ...d.weightLogs, [clientId]: [entry, ...(d.weightLogs[clientId] ?? [])] },
-      // Keep the client's headline current weight in sync.
-      clients: d.clients.map((c) => (c.id === clientId ? { ...c, currentWeight: weight } : c)),
+      // Keep the client's headline weight + goal progress in sync, live.
+      clients: d.clients.map((c) =>
+        c.id === clientId
+          ? { ...c, currentWeight: weight, progress: computeProgress({ ...c, currentWeight: weight }, c.progress), lastActive: "Just now" }
+          : c,
+      ),
     }));
     if (sessionRef.current?.role === "member") {
       fetch("/api/member/activity", {
