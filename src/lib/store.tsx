@@ -13,6 +13,7 @@ import type {
 } from "@/lib/platform";
 import type { SessionUser } from "@/lib/auth/session";
 import { seedExercises, seedWorkouts, seedPrograms, seedRecipes, prebuiltForms } from "@/lib/seed-content";
+import { withLiveMetrics } from "@/lib/metrics";
 import { Toaster } from "@/components/ui/Toaster";
 
 export function uid(prefix = "id") {
@@ -230,6 +231,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const lastSaved = useRef<string | null>(null);
   const loaded = useRef(false);
+  // When a member just logged activity, hold off the next server pull briefly so
+  // an in-flight write can land before we overwrite the optimistic local state.
+  const memberWriteAt = useRef(0);
   const sessionRef = useRef<SessionUser | null>(null);
   const dbRef = useRef<DB>(db);
   useEffect(() => {
@@ -246,6 +250,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!loaded.current || !sess) return;
     // Staff bulk-save: skip if there are pending unsaved local changes.
     if (sess.role !== "member" && JSON.stringify(dbRef.current) !== lastSaved.current) return;
+    // Member: don't clobber a just-logged action while its write is in flight.
+    if (sess.role === "member" && Date.now() - memberWriteAt.current < 2500) return;
     try {
       const res = await fetch("/api/workspace");
       if (!res.ok) return;
@@ -266,7 +272,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // staff poll a little slower (they're the writers).
   useEffect(() => {
     if (!hydrated || !session) return;
-    const interval = session.role === "member" ? 4000 : 6000;
+    // Poll often enough that a member's logged activity surfaces on the coach's
+    // screen (and vice-versa) within a couple of seconds.
+    const interval = session.role === "member" ? 2500 : 3000;
     const id = window.setInterval(refresh, interval);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
@@ -570,6 +578,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     // A member's outgoing message is persisted server-side safely.
     if (fromClient && sessionRef.current?.role === "member") {
+      memberWriteAt.current = Date.now();
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -653,6 +662,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const ci: CheckIn = { id: uid("ci"), clientId, date: new Date().toISOString(), answers };
     setDb((d) => ({ ...d, checkins: [ci, ...d.checkins] }));
     if (sessionRef.current?.role === "member") {
+      memberWriteAt.current = Date.now();
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -729,6 +739,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
     // Members persist via the dedicated endpoint (they can't bulk-save).
     if (sessionRef.current?.role === "member") {
+      memberWriteAt.current = Date.now();
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -747,6 +758,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     setDb((d) => ({ ...d, photos: { ...d.photos, [clientId]: [...(d.photos[clientId] ?? []), photo] } }));
     if (sessionRef.current?.role === "member") {
+      memberWriteAt.current = Date.now();
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -757,6 +769,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const removePhoto = useCallback((clientId: string, id: string) => {
     setDb((d) => ({ ...d, photos: { ...d.photos, [clientId]: (d.photos[clientId] ?? []).filter((p) => p.id !== id) } }));
     if (sessionRef.current?.role === "member") {
+      memberWriteAt.current = Date.now();
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -775,6 +788,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clients: d.clients.map((c) => (c.id === clientId ? { ...c, currentWeight: weight } : c)),
     }));
     if (sessionRef.current?.role === "member") {
+      memberWriteAt.current = Date.now();
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -796,6 +810,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setNutritionLog = useCallback((clientId: string, log: NutritionLog) => {
     setDb((d) => ({ ...d, nutritionLogs: { ...d.nutritionLogs, [clientId]: log } }));
     if (sessionRef.current?.role === "member") {
+      memberWriteAt.current = Date.now();
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -889,27 +904,38 @@ export function useApp() {
 
 /**
  * The clients the signed-in staff member should see: owner/admin see everyone;
- * a coach sees only clients assigned to them.
+ * a coach sees only clients assigned to them. Each client carries live
+ * adherence + progress derived from their logged activity (see lib/metrics).
  */
 export function useMyClients() {
-  const { clients, session } = useApp();
-  if (session?.role === "coach") {
-    const me = session.email.toLowerCase();
-    return clients.filter((c) => (c.coachEmail ?? "").toLowerCase() === me);
-  }
-  return clients;
+  const { clients, session, completions, clientPlans, programs } = useApp();
+  return useMemo(() => {
+    const scoped =
+      session?.role === "coach"
+        ? clients.filter((c) => (c.coachEmail ?? "").toLowerCase() === session.email.toLowerCase())
+        : clients;
+    return scoped.map((c) => withLiveMetrics(c, completions[c.id], clientPlans[c.id], programs));
+  }, [clients, session, completions, clientPlans, programs]);
 }
 
-/** Convenience: the client currently being viewed in the client portal. */
+/**
+ * Convenience: the client currently being viewed in the client portal, with
+ * live adherence + progress so their dashboard reflects activity immediately.
+ */
 export function useCurrentClient() {
-  const { clients, currentClientId, session } = useApp();
-  // A signed-in member is linked to their own client record by id (or email).
-  if (session?.role === "member") {
-    return (
-      clients.find((c) => c.id === session.clientId) ??
-      clients.find((c) => c.email.toLowerCase() === session.email.toLowerCase()) ??
-      null
-    );
-  }
-  return clients.find((c) => c.id === currentClientId) ?? clients[0] ?? null;
+  const { clients, currentClientId, session, completions, clientPlans, programs } = useApp();
+  return useMemo(() => {
+    let base: Client | null;
+    if (session?.role === "member") {
+      // A signed-in member is linked to their own client record by id (or email).
+      base =
+        clients.find((c) => c.id === session.clientId) ??
+        clients.find((c) => c.email.toLowerCase() === session.email.toLowerCase()) ??
+        null;
+    } else {
+      base = clients.find((c) => c.id === currentClientId) ?? clients[0] ?? null;
+    }
+    if (!base) return null;
+    return withLiveMetrics(base, completions[base.id], clientPlans[base.id], programs);
+  }, [clients, currentClientId, session, completions, clientPlans, programs]);
 }

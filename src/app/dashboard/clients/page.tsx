@@ -53,7 +53,7 @@ function Loading() {
 }
 
 export default function ClientsPage() {
-  const { addClient, hydrated, settings, session } = useApp();
+  const { addClient, hydrated, settings, session, refresh } = useApp();
   const clients = useMyClients();
   const searchParams = useSearchParams();
 
@@ -79,6 +79,10 @@ export default function ClientsPage() {
   useEffect(() => {
     loadAccess();
   }, [loadAccess]);
+
+  // Pull the freshest workspace on open so adherence/progress reflect the
+  // latest client activity without waiting for the next poll.
+  useEffect(() => { refresh(); }, [refresh]);
 
   // Auto-open the modal when the URL has ?new=1
   useEffect(() => {

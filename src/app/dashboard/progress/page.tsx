@@ -17,6 +17,7 @@ import { DataControls } from "@/components/dashboard/DataControls";
 import { weightTrend, strengthTrend, habits } from "@/lib/data";
 import type { Exercise } from "@/lib/data";
 import { useApp } from "@/lib/store";
+import { clientAdherence } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 
 const habitIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -49,8 +50,16 @@ export default function ProgressPage() {
   const clientCount = app.clients.length;
   const avgAdherence =
     clientCount > 0
-      ? Math.round(app.clients.reduce((sum, c) => sum + (c.adherence ?? 0), 0) / clientCount)
+      ? Math.round(
+          app.clients.reduce(
+            (sum, c) => sum + clientAdherence(c, app.completions[c.id], app.clientPlans[c.id], app.programs),
+            0,
+          ) / clientCount,
+        )
       : 0;
+
+  // Workouts logged across all clients (live) — replaces the static "0".
+  const totalWorkoutsLogged = Object.values(app.completions).reduce((n, list) => n + (list?.length ?? 0), 0);
 
   return (
     <>
@@ -71,7 +80,7 @@ export default function ProgressPage() {
           <>
             <StatCard label="Active clients" value={String(clientCount)} icon={Users} />
             <StatCard label="Avg adherence" value={`${avgAdherence}%`} icon={Target} />
-            <StatCard label="Workouts logged" value="0" icon={Activity} />
+            <StatCard label="Workouts logged" value={String(totalWorkoutsLogged)} icon={Activity} />
             <StatCard label="Active streak" value="0 days" icon={Flame} />
           </>
         )}

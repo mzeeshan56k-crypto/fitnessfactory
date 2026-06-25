@@ -7,12 +7,14 @@ import {
   Plus, Dumbbell, Layers, Library, Clock, Search, Play, Users, Trash2,
   Loader2, Tag, Copy, ChevronRight, Check, FolderOpen, Hash, X,
   ArrowUpDown, ListChecks, Video as VideoIcon, UtensilsCrossed, Flame, Pencil,
+  Coffee, Salad, Cookie, Soup,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
 import { ExerciseAnimation } from "@/components/ui/ExerciseAnimation";
 import { WorkoutThumb } from "@/components/ui/WorkoutThumb";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
+import { ImageUpload } from "@/components/ui/ImageUpload";
 import { DataControls } from "@/components/dashboard/DataControls";
 import { Avatar } from "@/components/ui/Avatar";
 import type { Workout, Recipe, MealType } from "@/lib/data";
@@ -48,6 +50,16 @@ function difficultyClasses(level: string) {
     case "Advanced": return "bg-rose-500/15 text-rose-400";
     default: return "bg-ink-100 text-ink-600";
   }
+}
+
+// Icon for a recipe's placeholder tile, picked from its primary meal type so a
+// photo-less library still reads as food at a glance.
+function mealIcon(types: MealType[]): React.ComponentType<{ className?: string }> {
+  const t = types[0];
+  if (t === "Breakfast") return Coffee;
+  if (t === "Snacks") return Cookie;
+  if (t === "Dinner") return Soup;
+  return Salad; // Lunch / default
 }
 
 export default function MasterLibrariesPage() {
@@ -101,6 +113,7 @@ export default function MasterLibrariesPage() {
   const [recipeSort, setRecipeSort] = useState<RecipeSortKey>("recent");
   const [recipeModal, setRecipeModal] = useState(false);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
+  const [recipeUploading, setRecipeUploading] = useState(false);
   const [rForm, setRForm] = useState({
     name: "", calories: "", protein: "", carbs: "", fat: "", servings: "1",
     mealTypes: new Set<MealType>(["Lunch"]), photo: "", ingredients: "", instructions: "",
@@ -265,6 +278,23 @@ export default function MasterLibrariesPage() {
       photo: r.photo ?? "", ingredients: (r.ingredients ?? []).join(", "), instructions: r.instructions ?? "",
     });
     setRecipeModal(true);
+  }
+  async function handleRecipePhoto(dataUrl?: string) {
+    if (!dataUrl) { setRForm((s) => ({ ...s, photo: "" })); return; }
+    setRecipeUploading(true);
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl }),
+      });
+      const data = await res.json();
+      if (data.url) setRForm((s) => ({ ...s, photo: data.url }));
+    } catch {
+      /* ignore */
+    } finally {
+      setRecipeUploading(false);
+    }
   }
   function toggleRecipeMealType(t: MealType) {
     setRForm((s) => {
@@ -556,7 +586,7 @@ export default function MasterLibrariesPage() {
             ) : (
               <div className="card overflow-hidden">
                 {/* header row */}
-                <div className="hidden items-center gap-3 border-b border-ink-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-400 md:flex">
+                <div className="hidden items-center gap-4 border-b border-ink-100 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-ink-400 md:flex">
                   <button onClick={toggleSelectAll} className="flex h-5 w-5 items-center justify-center" aria-label="Select all">
                     <span className={cn(
                       "flex h-4 w-4 items-center justify-center rounded border",
@@ -567,9 +597,9 @@ export default function MasterLibrariesPage() {
                   </button>
                   <span className="w-12" />
                   <span className="flex-1">Name</span>
-                  <span className="hidden w-36 lg:block">Created by</span>
-                  <span className="hidden w-28 lg:block">Date created</span>
-                  <span className="w-32">Tags</span>
+                  <span className="hidden w-40 2xl:block">Created by</span>
+                  <span className="hidden w-28 2xl:block">Date created</span>
+                  <span className="hidden w-32 xl:block">Tags</span>
                   <span className="w-5" />
                 </div>
 
@@ -580,7 +610,7 @@ export default function MasterLibrariesPage() {
                       <div
                         key={w.id}
                         className={cn(
-                          "group flex items-center gap-3 px-4 py-3 transition hover:bg-ink-50",
+                          "group flex items-center gap-4 px-5 py-3.5 transition hover:bg-ink-50",
                           isSel && "bg-brand-50/40",
                         )}
                       >
@@ -603,28 +633,34 @@ export default function MasterLibrariesPage() {
 
                         <Link href={`/dashboard/workouts/${w.id}`} className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="truncate font-semibold text-ink-900">{w.name}</span>
+                            <span className="truncate font-semibold text-ink-900 group-hover:text-brand-500">{w.name}</span>
                             {w.video && <VideoIcon className="h-3.5 w-3.5 shrink-0 text-brand-400" />}
+                            <span className={cn("badge shrink-0", difficultyClasses(w.difficulty))}>{w.difficulty}</span>
                           </div>
-                          <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-500">
-                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> est. {w.durationMin} min</span>
-                            <span>·</span>
-                            <span className="flex items-center gap-1"><ListChecks className="h-3 w-3" /> {w.exercises.length} exercises</span>
-                            <span className={cn("badge hidden sm:inline-flex", difficultyClasses(w.difficulty))}>{w.difficulty}</span>
+                          <div className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-xs text-ink-500">
+                            <Clock className="h-3 w-3" /> est. {w.durationMin} min
+                            <span className="text-ink-300">·</span>
+                            <ListChecks className="h-3 w-3" /> {w.exercises.length} {w.exercises.length === 1 ? "exercise" : "exercises"}
                           </div>
                         </Link>
 
-                        <span className="hidden w-36 truncate text-sm text-ink-500 lg:block">{w.createdBy ?? app.settings.businessName}</span>
-                        <span className="hidden w-28 text-sm text-ink-500 lg:block">{w.createdAt ? shortDate(w.createdAt) : "—"}</span>
-                        <div className="flex w-32 flex-wrap gap-1">
-                          {(w.tags ?? []).slice(0, 2).map((t) => (
-                            <span key={t} className="badge bg-brand-500/10 text-brand-400">{t}</span>
-                          ))}
-                          {(w.tags?.length ?? 0) > 2 && (
-                            <span className="badge bg-ink-100 text-ink-500">+{(w.tags!.length - 2)}</span>
+                        <span className="hidden w-40 truncate text-sm text-ink-500 2xl:block">{w.createdBy ?? app.settings.businessName}</span>
+                        <span className="hidden w-28 text-sm text-ink-500 2xl:block">{w.createdAt ? shortDate(w.createdAt) : "—"}</span>
+                        <div className="hidden w-32 flex-wrap gap-1 xl:flex">
+                          {(w.tags ?? []).length === 0 ? (
+                            <span className="text-xs text-ink-300">—</span>
+                          ) : (
+                            <>
+                              {(w.tags ?? []).slice(0, 2).map((t) => (
+                                <span key={t} className="badge bg-brand-500/10 text-brand-400">{t}</span>
+                              ))}
+                              {(w.tags?.length ?? 0) > 2 && (
+                                <span className="badge bg-ink-100 text-ink-500">+{(w.tags!.length - 2)}</span>
+                              )}
+                            </>
                           )}
                         </div>
-                        <Link href={`/dashboard/workouts/${w.id}`} className="text-ink-300 transition group-hover:text-brand-400">
+                        <Link href={`/dashboard/workouts/${w.id}`} className="shrink-0 text-ink-300 transition group-hover:text-brand-400">
                           <ChevronRight className="h-5 w-5" />
                         </Link>
                       </div>
@@ -658,7 +694,7 @@ export default function MasterLibrariesPage() {
             ) : (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {filteredExercises.map((ex) => (
-                  <div key={ex.id} className="card group/card overflow-hidden">
+                  <div key={ex.id} className="card group/card overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
                     <button
                       type="button"
                       onClick={() => setVideo({ src: ex.video || "", title: ex.name })}
@@ -717,44 +753,59 @@ export default function MasterLibrariesPage() {
             ) : visibleRecipes.length === 0 ? (
               <div className="card p-12 text-center text-sm text-ink-400">No recipes match your filters.</div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleRecipes.map((r) => (
-                  <div key={r.id} className="card group/recipe overflow-hidden">
-                    <button type="button" onClick={() => openEditRecipe(r)} className="relative block h-40 w-full text-left">
-                      {r.photo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.photo} alt={r.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br text-white/70", posterFor(r.name))}>
-                          <UtensilsCrossed className="h-10 w-10" />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                {visibleRecipes.map((r) => {
+                  const MealIcon = mealIcon(r.mealTypes);
+                  return (
+                    <div key={r.id} className="card group/recipe overflow-hidden transition hover:-translate-y-0.5 hover:shadow-soft">
+                      <button type="button" onClick={() => openEditRecipe(r)} className="relative block h-44 w-full text-left">
+                        {r.photo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.photo} alt={r.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br", posterFor(r.name))}>
+                            <MealIcon className="h-12 w-12 text-white/80" />
+                          </div>
+                        )}
+                        <span className="absolute left-2 top-2 rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-ink-700 backdrop-blur-sm">
+                          {r.mealTypes[0]}
+                        </span>
+                        <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-ink-950/55 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+                          <Flame className="h-3 w-3" /> {r.calories}
+                        </span>
+                      </button>
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <button type="button" onClick={() => openEditRecipe(r)} className="min-w-0 flex-1 text-left">
+                            <h3 className="truncate font-semibold text-ink-900 group-hover/recipe:text-brand-500">{r.name}</h3>
+                            <p className="mt-0.5 truncate text-xs text-ink-500">{r.mealTypes.join(" · ")}</p>
+                          </button>
+                          <div className="flex shrink-0 gap-1 opacity-0 transition group-hover/recipe:opacity-100">
+                            <button onClick={() => openEditRecipe(r)} aria-label={`Edit ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-brand-500/15 hover:text-brand-400">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => { const c = app.duplicateRecipe(r.id); if (c) app.notify(`Duplicated “${r.name}”`); }} aria-label={`Duplicate ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-700">
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => { app.removeRecipe(r.id); app.notify(`Removed “${r.name}”`, "info"); }} aria-label={`Delete ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      )}
-                      <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-ink-950/55 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
-                        <Flame className="h-3 w-3" /> {r.calories}
-                      </span>
-                    </button>
-                    <div className="p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <button type="button" onClick={() => openEditRecipe(r)} className="min-w-0 flex-1 text-left">
-                          <h3 className="truncate font-semibold text-ink-900">{r.name}</h3>
-                        </button>
-                        <div className="flex shrink-0 gap-1 opacity-0 transition group-hover/recipe:opacity-100">
-                          <button onClick={() => openEditRecipe(r)} aria-label={`Edit ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-brand-500/15 hover:text-brand-400">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button onClick={() => { const c = app.duplicateRecipe(r.id); if (c) app.notify(`Duplicated “${r.name}”`); }} aria-label={`Duplicate ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-700">
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                          <button onClick={() => { app.removeRecipe(r.id); app.notify(`Removed “${r.name}”`, "info"); }} aria-label={`Delete ${r.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                        <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-3">
+                          <span className="text-xs font-medium text-ink-500">{r.calories} Cal / Serving</span>
+                          {(r.protein != null || r.carbs != null || r.fat != null) && (
+                            <span className="flex items-center gap-2 text-[11px] font-medium text-ink-400">
+                              {r.protein != null && <span><span className="text-ink-600">{r.protein}g</span> P</span>}
+                              {r.carbs != null && <span><span className="text-ink-600">{r.carbs}g</span> C</span>}
+                              {r.fat != null && <span><span className="text-ink-600">{r.fat}g</span> F</span>}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <p className="mt-1 truncate text-xs text-ink-500">{r.mealTypes.join(", ")}</p>
-                      <p className="mt-2 text-xs font-medium text-ink-400">{r.calories} Cal / Serving</p>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )
           )}
@@ -1038,8 +1089,20 @@ export default function MasterLibrariesPage() {
           <Field label="Instructions">
             <textarea rows={3} className="input resize-none" value={rForm.instructions} onChange={(e) => setRForm((s) => ({ ...s, instructions: e.target.value }))} placeholder="How to prepare this meal…" />
           </Field>
-          <Field label="Photo URL (optional)">
-            <input className="input" value={rForm.photo} onChange={(e) => setRForm((s) => ({ ...s, photo: e.target.value }))} placeholder="https://…/photo.jpg" />
+          <Field label="Photo">
+            <ImageUpload
+              aspect="video"
+              value={rForm.photo || undefined}
+              label={recipeUploading ? "Uploading…" : "Upload a food photo"}
+              onChange={handleRecipePhoto}
+            />
+            <input
+              className="input mt-2"
+              value={rForm.photo}
+              onChange={(e) => setRForm((s) => ({ ...s, photo: e.target.value }))}
+              placeholder="…or paste an image URL"
+            />
+            <p className="mt-1 text-xs text-ink-400">A photo makes the recipe card look just like the meals library — optional, a clean food tile is shown otherwise.</p>
           </Field>
         </div>
       </Modal>

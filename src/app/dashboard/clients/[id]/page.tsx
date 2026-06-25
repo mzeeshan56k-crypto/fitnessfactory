@@ -15,6 +15,7 @@ import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ShareInvite } from "@/components/ui/ShareInvite";
 import { WeightChart, StrengthChart, AdherenceRing } from "@/components/dashboard/Charts";
 import { useApp } from "@/lib/store";
+import { clientAdherence, clientProgress } from "@/lib/metrics";
 import {
   weightTrend, strengthTrend, type ClientStatus,
 } from "@/lib/data";
@@ -48,7 +49,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     clients, updateClient, removeClient, seeded, hydrated, clientNotes, addClientNote, settings,
     workouts: libWorkouts, programs, mealPlans, clientPlans, completions, photos,
     weightLogs, checkins, nutritionLogs, session, assignCoach, notify,
-    toggleAssignedWorkout, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
+    toggleAssignedWorkout, setClientProgram, setClientMealPlan, addPhoto, removePhoto, refresh,
   } = useApp();
   const [coaches, setCoaches] = useState<{ email: string; name: string; role: string }[]>([]);
   const router = useRouter();
@@ -92,6 +93,10 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       .catch(() => {});
     return () => { active = false; };
   }, [params.id]);
+
+  // Pull the freshest workspace on open so this client's logged sessions,
+  // weigh-ins and derived adherence/progress are up to date right away.
+  useEffect(() => { refresh(); }, [refresh]);
 
   // Owner/admin can reassign the client's trainer — load the coach list.
   const isStaffAdmin = session?.role === "owner" || session?.role === "admin";
@@ -170,6 +175,11 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
 
   // Assignment plan for this client.
   const plan = clientPlans[c.id] ?? { workoutIds: [] };
+  // Live adherence + progress derived from logged activity (updates the moment
+  // the member logs a session or weigh-in). The edit form still shows/saves the
+  // stored baseline values from `c`.
+  const adherence = clientAdherence(c, completions[c.id], plan, programs);
+  const progress = clientProgress(c);
   const assignedWorkouts = plan.workoutIds
     .map((id) => libWorkouts.find((w) => w.id === id))
     .filter((w): w is NonNullable<typeof w> => Boolean(w));
@@ -336,7 +346,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         <StatTile icon={Scale} label="Current weight" value={`${c.currentWeight} lb`} hint={`${weightDelta >= 0 ? "+" : ""}${weightDelta} lb vs start`} />
         <StatTile icon={Target} label="Goal weight" value={`${c.goalWeight} lb`} />
         <StatTile icon={Flag} label="Start weight" value={`${c.startWeight} lb`} />
-        <StatTile icon={Activity} label="Adherence" value={`${c.adherence}%`} />
+        <StatTile icon={Activity} label="Adherence" value={`${adherence}%`} />
       </div>
 
       {/* Tabs */}
@@ -367,12 +377,12 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               <div className="mt-4">
                 <div className="mb-1.5 flex justify-between text-sm text-ink-600">
                   <span>Progress to goal</span>
-                  <span className="font-semibold text-ink-900">{c.progress}%</span>
+                  <span className="font-semibold text-ink-900">{progress}%</span>
                 </div>
                 <div className="h-3 w-full rounded-full bg-ink-100">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500"
-                    style={{ width: `${c.progress}%` }}
+                    style={{ width: `${progress}%` }}
                   />
                 </div>
               </div>
@@ -415,7 +425,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                 <ul className="mt-3 space-y-2 text-sm text-ink-600">
                   <li className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-                    Adherence is at {c.adherence}% — {c.adherence >= 85 ? "well above target, momentum is strong." : c.adherence >= 60 ? "steady, but a nudge could push it higher." : "below target; consider a re-engagement check-in."}
+                    Adherence is at {adherence}% — {adherence >= 85 ? "well above target, momentum is strong." : adherence >= 60 ? "steady, but a nudge could push it higher." : "below target; consider a re-engagement check-in."}
                   </li>
                   <li className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
@@ -423,7 +433,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                   </li>
                   <li className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-                    {c.progress}% of the way through &ldquo;{c.goal}&rdquo; on the {c.program} program. Last active {c.lastActive.toLowerCase()}.
+                    {progress}% of the way through &ldquo;{c.goal}&rdquo; on the {c.program} program. Last active {c.lastActive.toLowerCase()}.
                   </li>
                 </ul>
               </div>
@@ -433,7 +443,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               <h2 className="font-semibold text-ink-900">Adherence</h2>
               <p className="text-sm text-ink-500">Workouts completed</p>
               <div className="mt-2 flex flex-1 items-center justify-center">
-                <AdherenceRing value={c.adherence} />
+                <AdherenceRing value={adherence} />
               </div>
             </div>
           </div>
