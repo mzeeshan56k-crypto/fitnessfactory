@@ -7,6 +7,7 @@ import {
   ArrowLeft, MessageSquare, Pencil, Trash2, Scale, Target, Flag, Activity,
   Dumbbell, Calendar, Sparkles, Clock, Layers, LineChart, Loader2, Images,
   Mail, Check, KeyRound, X, Apple, CheckCircle2, ClipboardCheck, UserCog,
+  ListChecks, Flame,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
@@ -14,9 +15,11 @@ import { PhotoCompare } from "@/components/PhotoCompare";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ShareInvite } from "@/components/ui/ShareInvite";
 import { WeightChart, StrengthChart, AdherenceRing } from "@/components/dashboard/Charts";
+import { HabitIcon } from "@/lib/habit-icons";
 import { useApp } from "@/lib/store";
 import {
   weightTrend, strengthTrend, type ClientStatus,
+  habitStreak, habitWeekly, lastNDays, habitDoneOn,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +52,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     workouts: libWorkouts, programs, mealPlans, clientPlans, completions, photos,
     weightLogs, checkins, nutritionLogs, session, assignCoach,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
+    masterHabits, habitLogs, toggleAssignedHabit,
   } = useApp();
   const [coaches, setCoaches] = useState<{ email: string; name: string; role: string }[]>([]);
   const router = useRouter();
@@ -175,6 +179,17 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     .filter((w): w is NonNullable<typeof w> => Boolean(w));
   const unassignedWorkouts = libWorkouts.filter((w) => !plan.workoutIds.includes(w.id));
   const sessions = completions[c.id] ?? [];
+  // Habit assignment + the member's live completion log.
+  const assignedHabitIds = plan.habitIds ?? [];
+  const assignedHabits = assignedHabitIds
+    .map((id) => masterHabits.find((h) => h.id === id))
+    .filter((h): h is NonNullable<typeof h> => Boolean(h));
+  const unassignedHabits = masterHabits.filter((h) => !assignedHabitIds.includes(h.id));
+  const clientHabitLog = habitLogs[c.id] ?? {};
+  const weekDays = lastNDays(7).map((d) => ({
+    key: d,
+    label: new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "narrow" }),
+  }));
   const clientPhotos = photos[c.id] ?? [];
   const weightLog = weightLogs[c.id] ?? [];
   const clientCheckins = checkins.filter((ci) => ci.clientId === c.id);
@@ -547,6 +562,110 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Habits — assignment + live completion from the member */}
+            <div className="card p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="h-5 w-5 text-brand-400" />
+                  <h2 className="font-semibold text-ink-900">Habits</h2>
+                  <span className="badge bg-ink-100 text-ink-600">{assignedHabits.length}</span>
+                </div>
+                <div className="w-full sm:w-64">
+                  <select
+                    className="input"
+                    value=""
+                    onChange={(e) => { if (e.target.value) toggleAssignedHabit(c.id, e.target.value); }}
+                    disabled={unassignedHabits.length === 0}
+                  >
+                    <option value="">
+                      {masterHabits.length === 0
+                        ? "No habits in your library"
+                        : unassignedHabits.length === 0
+                          ? "All habits assigned"
+                          : "+ Assign a habit…"}
+                    </option>
+                    {unassignedHabits.map((h) => (
+                      <option key={h.id} value={h.id}>{h.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <p className="mt-1 text-sm text-ink-500">
+                Assigned habits {c.name.split(" ")[0]} checks off — streaks and this week&apos;s
+                progress update live as they log.
+              </p>
+
+              {assignedHabits.length === 0 ? (
+                <div className="mt-4">
+                  <EmptyState
+                    icon={ListChecks}
+                    title="No habits assigned"
+                    description={
+                      masterHabits.length === 0
+                        ? "Build your Master Habits library first, then assign habits here."
+                        : "Use the dropdown above to assign habits. The member sees only what's assigned and checks them off daily."
+                    }
+                    action={
+                      masterHabits.length === 0
+                        ? <Link href="/dashboard/habits" className="btn-primary">Go to Master Habits</Link>
+                        : undefined
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2.5">
+                  {assignedHabits.map((h) => {
+                    const dates = clientHabitLog[h.id];
+                    const streak = habitStreak(dates);
+                    const week = habitWeekly(dates);
+                    const doneToday = habitDoneOn(dates);
+                    return (
+                      <div key={h.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-ink-100 p-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500/15 text-brand-400">
+                          <HabitIcon icon={h.icon} className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold text-ink-900">{h.name}</span>
+                            {doneToday && (
+                              <span className="badge bg-accent-500/15 text-accent-400">Done today</span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-1 text-xs text-ink-400">
+                            <Flame className={cn("h-3.5 w-3.5", streak > 0 ? "text-orange-400" : "text-ink-300")} />
+                            {streak} day streak
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {weekDays.map((d, i) => (
+                            <div key={d.key} className="flex flex-col items-center gap-1">
+                              <span
+                                className={cn(
+                                  "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold transition",
+                                  week[i] ? "bg-accent-500 text-white" : "bg-ink-100 text-ink-300",
+                                )}
+                                title={d.key}
+                              >
+                                {week[i] ? <Check className="h-3.5 w-3.5" /> : ""}
+                              </span>
+                              <span className="text-[10px] text-ink-400">{d.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => toggleAssignedHabit(c.id, h.id)}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-400 transition hover:bg-rose-500/15 hover:text-rose-400"
+                          aria-label={`Unassign ${h.name}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

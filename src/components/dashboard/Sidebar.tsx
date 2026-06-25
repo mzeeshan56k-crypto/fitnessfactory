@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Dumbbell, Apple, CalendarDays,
   MessageSquare, LineChart, Sparkles, Settings, LogOut,
   TrafficCone, KanbanSquare, ClipboardList, FileSpreadsheet, UsersRound, Megaphone,
-  ScanLine, HeartPulse,
+  ScanLine, HeartPulse, ListChecks,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { useApp } from "@/lib/store";
@@ -20,6 +20,7 @@ const nav = [
   { href: "/dashboard/form-check", label: "Form Check", icon: ScanLine },
   { href: "/dashboard/program-builder", label: "Program Builder", icon: ClipboardList },
   { href: "/dashboard/nutrition", label: "Nutrition", icon: Apple },
+  { href: "/dashboard/habits", label: "Habits", icon: ListChecks },
   { href: "/dashboard/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/dashboard/kanban", label: "Workflow", icon: KanbanSquare },
   { href: "/dashboard/form-builder", label: "Form Builder", icon: FileSpreadsheet },

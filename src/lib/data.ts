@@ -114,6 +114,73 @@ export interface Habit {
   weekly: boolean[];
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Habits (Trainerize-style Master Habits library)                            */
+/* -------------------------------------------------------------------------- */
+
+// A folder in the Master Habits library (e.g. "Nutrition", "Sleep").
+export interface HabitFolder {
+  id: string;
+  name: string;
+}
+
+// A reusable habit template the coach builds in the Master Habits library and
+// assigns to clients. Clients then check it off each day to build a streak.
+export interface MasterHabit {
+  id: string;
+  folderId: string;
+  name: string;
+  description: string;
+  icon: string; // key into the habit icon registry
+}
+
+// A client's completion history for the habits assigned to them: keyed by
+// master-habit id, each value is the list of "YYYY-MM-DD" days completed.
+export type HabitLog = Record<string, string[]>;
+
+// Local-time date key ("YYYY-MM-DD") — the unit a habit is checked off by.
+export function habitDateKey(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// The last `count` calendar days (oldest → newest), each as a date key.
+export function lastNDays(count: number, from: Date = new Date()): string[] {
+  const out: string[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(from);
+    d.setDate(d.getDate() - i);
+    out.push(habitDateKey(d));
+  }
+  return out;
+}
+
+// Whether a habit was completed today.
+export function habitDoneOn(dates: string[] | undefined, day: string = habitDateKey()): boolean {
+  return !!dates && dates.includes(day);
+}
+
+// Current streak: consecutive completed days ending today (or yesterday, so a
+// streak isn't lost just because today hasn't been ticked yet).
+export function habitStreak(dates: string[] | undefined): number {
+  if (!dates || dates.length === 0) return 0;
+  const set = new Set(dates);
+  const cursor = new Date();
+  // If today isn't done yet, start counting from yesterday.
+  if (!set.has(habitDateKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  let streak = 0;
+  while (set.has(habitDateKey(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+// A rolling 7-day completion view (oldest → newest) for weekly dots.
+export function habitWeekly(dates: string[] | undefined): boolean[] {
+  const set = new Set(dates ?? []);
+  return lastNDays(7).map((d) => set.has(d));
+}
+
 // Coach documentation, persisted in the shared workspace (keyed by client id).
 export interface ClientNote {
   author: string;
@@ -136,6 +203,7 @@ export interface ClientPlan {
   workoutIds: string[];
   programId?: string;
   mealPlanId?: string;
+  habitIds?: string[]; // Master Habits assigned to this client
 }
 
 // A logged training session the member completed (coach reviews these).

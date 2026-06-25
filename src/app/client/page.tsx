@@ -3,16 +3,13 @@
 import Link from "next/link";
 import {
   Dumbbell, Flame, Target, TrendingDown, ChevronRight, CheckCircle2,
-  Calendar, Apple, Droplet, Moon, Footprints,
-  ClipboardCheck, Trophy, GraduationCap, UserPlus,
+  Calendar, ClipboardCheck, Trophy, GraduationCap, UserPlus, ListChecks,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
-import { habits } from "@/lib/data";
+import { habitStreak, habitDoneOn } from "@/lib/data";
+import { HabitIcon } from "@/lib/habit-icons";
 import { EmptyState } from "@/components/ui/Modal";
-
-const habitIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  footprints: Footprints, droplet: Droplet, moon: Moon, utensils: Apple,
-};
+import { cn } from "@/lib/utils";
 
 export default function ClientTodayPage() {
   const app = useApp();
@@ -42,7 +39,13 @@ export default function ClientTodayPage() {
   const todaysWorkout = assignedWorkouts[0];
   const lost = c.startWeight - c.currentWeight;
   const toGoal = Math.abs(c.currentWeight - c.goalWeight);
-  const streak = Math.max(0, ...habits.map((h) => h.streak));
+
+  // The habits the coach has assigned + this member's own completion log.
+  const habitLog = app.habitLogs[c.id] ?? {};
+  const assignedHabits = (app.clientPlans[c.id]?.habitIds ?? [])
+    .map((id) => app.masterHabits.find((h) => h.id === id))
+    .filter((h): h is NonNullable<typeof h> => Boolean(h));
+  const streak = Math.max(0, ...assignedHabits.map((h) => habitStreak(habitLog[h.id])));
 
   return (
     <div className="space-y-6">
@@ -155,32 +158,51 @@ export default function ClientTodayPage() {
 
       {/* Habits */}
       <section className="card p-5">
-        <h2 className="font-semibold text-ink-900">Today&apos;s habits</h2>
-        <div className="mt-4 space-y-2">
-          {habits.map((h) => {
-            const Icon = habitIcons[h.icon] ?? CheckCircle2;
-            const doneToday = h.weekly[h.weekly.length - 1];
-            return (
-              <div
-                key={h.id}
-                className="flex items-center gap-3 rounded-xl border border-ink-100 p-3"
-              >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-ink-900">{h.name}</div>
-                  <div className="flex items-center gap-1 text-xs text-ink-400">
-                    <Flame className="h-3 w-3 text-orange-400" /> {h.streak} day streak
-                  </div>
-                </div>
-                <CheckCircle2
-                  className={doneToday ? "h-6 w-6 text-accent-500" : "h-6 w-6 text-ink-200"}
-                />
-              </div>
-            );
-          })}
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-ink-900">Today&apos;s habits</h2>
+          {assignedHabits.length > 0 && (
+            <Link href="/client/habits" className="text-sm font-medium text-brand-400 hover:text-brand-500">
+              View all
+            </Link>
+          )}
         </div>
+        {assignedHabits.length === 0 ? (
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-4 text-sm text-ink-500">
+            <ListChecks className="h-5 w-5 text-ink-400" />
+            No habits assigned yet — your coach will add some soon.
+          </div>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {assignedHabits.map((h) => {
+              const dates = habitLog[h.id];
+              const doneToday = habitDoneOn(dates);
+              const s = habitStreak(dates);
+              return (
+                <button
+                  key={h.id}
+                  onClick={() => app.toggleHabitDay(c.id, h.id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition",
+                    doneToday
+                      ? "border-accent-500/40 bg-accent-500/10"
+                      : "border-ink-100 hover:border-brand-200 hover:bg-brand-50/40",
+                  )}
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
+                    <HabitIcon icon={h.icon} className="h-4 w-4" />
+                  </span>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-ink-900">{h.name}</div>
+                    <div className="flex items-center gap-1 text-xs text-ink-400">
+                      <Flame className={cn("h-3 w-3", s > 0 ? "text-orange-400" : "text-ink-300")} /> {s} day streak
+                    </div>
+                  </div>
+                  <CheckCircle2 className={doneToday ? "h-6 w-6 text-accent-500" : "h-6 w-6 text-ink-200"} />
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Next session */}

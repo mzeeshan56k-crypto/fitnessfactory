@@ -17,6 +17,7 @@ interface Photo { id: string; label: string; date: string; url: string }
 interface FoodEntry { id: string; name: string; kcal: number }
 interface NutritionLog { water: number; foodLog: FoodEntry[]; logged: string[] }
 interface WeightEntry { date: string; weight: number }
+type HabitLog = Record<string, string[]>; // habitId -> completed "YYYY-MM-DD" dates
 interface Workspace {
   clients?: { id: string; email: string; currentWeight?: number }[];
   conversations?: Conversation[];
@@ -25,8 +26,12 @@ interface Workspace {
   photos?: Record<string, Photo[]>;
   nutritionLogs?: Record<string, NutritionLog>;
   weightLogs?: Record<string, WeightEntry[]>;
+  habitLogs?: Record<string, HabitLog>;
+  clientPlans?: Record<string, { habitIds?: string[] }>;
   [k: string]: unknown;
 }
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -39,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight";
+    kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight" | "habit";
     text?: string;
     answers?: Record<string, string | number>;
     completion?: Partial<Completion>;
@@ -47,6 +52,8 @@ export async function POST(req: NextRequest) {
     photoId?: string;
     log?: NutritionLog;
     weight?: number;
+    habitId?: string;
+    date?: string;
   };
   try {
     body = await req.json();
@@ -132,6 +139,25 @@ export async function POST(req: NextRequest) {
     ws.weightLogs = { ...all, [mine.id]: [entry, ...(all[mine.id] ?? [])].slice(0, 365) };
     // Keep the client's headline weight in sync.
     ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, currentWeight: weight } : c));
+  } else if (body.kind === "habit") {
+    const habitId = String(body.habitId ?? "");
+    const date = String(body.date ?? "");
+    if (!habitId || !DATE_RE.test(date)) {
+      return NextResponse.json({ error: "Invalid habit check-off." }, { status: 400 });
+    }
+    // A member may only log habits their coach has assigned to them.
+    const assigned = ws.clientPlans?.[mine.id]?.habitIds ?? [];
+    if (!assigned.includes(habitId)) {
+      return NextResponse.json({ error: "That habit isn't assigned to you." }, { status: 403 });
+    }
+    const all = ws.habitLogs ?? {};
+    const mineLog = all[mine.id] ?? {};
+    const dates = mineLog[habitId] ?? [];
+    // Toggle: remove if already logged for that day, otherwise add it.
+    const next = dates.includes(date)
+      ? dates.filter((x) => x !== date)
+      : [...dates, date].sort();
+    ws.habitLogs = { ...all, [mine.id]: { ...mineLog, [habitId]: next } };
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

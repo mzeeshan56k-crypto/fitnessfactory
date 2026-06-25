@@ -6,13 +6,17 @@ import {
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
   Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto, NutritionLog,
-  WeightEntry,
+  WeightEntry, HabitFolder, MasterHabit, HabitLog,
 } from "@/lib/data";
+import { habitDateKey } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
 } from "@/lib/platform";
 import type { SessionUser } from "@/lib/auth/session";
-import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms } from "@/lib/seed-content";
+import {
+  seedExercises, seedWorkouts, seedPrograms, prebuiltForms,
+  seedHabitFolders, seedMasterHabits,
+} from "@/lib/seed-content";
 
 export function uid(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -90,6 +94,11 @@ export interface DB {
   nutritionLogs: Record<string, NutritionLog>;
   // Bodyweight history, keyed by client id.
   weightLogs: Record<string, WeightEntry[]>;
+  // Master Habits library: folders + reusable habit templates.
+  habitFolders: HabitFolder[];
+  masterHabits: MasterHabit[];
+  // Members' habit completion history, keyed by client id.
+  habitLogs: Record<string, HabitLog>;
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -108,6 +117,7 @@ const emptyDB: DB = {
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
   formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
   nutritionLogs: {}, weightLogs: {},
+  habitFolders: [], masterHabits: [], habitLogs: {},
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -174,6 +184,19 @@ interface AppContextValue extends DB {
   toggleAssignedWorkout: (clientId: string, workoutId: string) => void;
   setClientProgram: (clientId: string, programId: string) => void;
   setClientMealPlan: (clientId: string, mealPlanId: string) => void;
+  // master habits library (coach)
+  addHabitFolder: (name: string) => HabitFolder;
+  renameHabitFolder: (id: string, name: string) => void;
+  removeHabitFolder: (id: string) => void;
+  addMasterHabit: (h: Partial<MasterHabit> & { folderId: string }) => MasterHabit;
+  updateMasterHabit: (id: string, patch: Partial<MasterHabit>) => void;
+  removeMasterHabit: (id: string) => void;
+  removeMasterHabits: (ids: string[]) => void;
+  moveHabitsToFolder: (ids: string[], folderId: string) => void;
+  loadStarterHabits: () => void;
+  // habit assignment (coach → client) + member check-off
+  toggleAssignedHabit: (clientId: string, habitId: string) => void;
+  toggleHabitDay: (clientId: string, habitId: string, day?: string) => void;
   // member logs a completed session
   completeWorkout: (clientId: string, summary: Omit<WorkoutCompletion, "id" | "date">) => void;
   // progress photos (shared coach ↔ member)
@@ -236,10 +259,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Live sync: poll periodically and whenever the tab regains focus.
+  // Live sync: poll periodically and whenever the tab regains focus, so the
+  // coach sees a member's check-ins/workouts/habits (and vice-versa) within
+  // seconds without a manual reload.
   useEffect(() => {
     if (!hydrated || !session) return;
-    const id = window.setInterval(refresh, 15000);
+    const id = window.setInterval(refresh, 6000);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -318,6 +343,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workouts: seedWorkouts,
       programs: seedPrograms,
       forms: prebuiltForms,
+      habitFolders: seedHabitFolders,
+      masterHabits: seedMasterHabits,
     }));
   }, []);
 
@@ -586,6 +613,106 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clientPlans: { ...d.clientPlans, [clientId]: { ...(d.clientPlans[clientId] ?? { workoutIds: [] }), mealPlanId } },
     })), []);
 
+  /* ----- master habits library (coach) ----- */
+  const addHabitFolder = useCallback((name: string): HabitFolder => {
+    const folder: HabitFolder = { id: uid("hf"), name: name.trim() || "New Folder" };
+    setDb((d) => ({ ...d, habitFolders: [...d.habitFolders, folder] }));
+    return folder;
+  }, []);
+  const renameHabitFolder = useCallback((id: string, name: string) =>
+    setDb((d) => ({
+      ...d,
+      habitFolders: d.habitFolders.map((f) => (f.id === id ? { ...f, name: name.trim() || f.name } : f)),
+    })), []);
+  // Removing a folder also removes the habits it contains (and any assignments).
+  const removeHabitFolder = useCallback((id: string) =>
+    setDb((d) => {
+      const removedIds = new Set(d.masterHabits.filter((h) => h.folderId === id).map((h) => h.id));
+      return {
+        ...d,
+        habitFolders: d.habitFolders.filter((f) => f.id !== id),
+        masterHabits: d.masterHabits.filter((h) => h.folderId !== id),
+        clientPlans: Object.fromEntries(
+          Object.entries(d.clientPlans).map(([cid, plan]) => [
+            cid,
+            { ...plan, habitIds: (plan.habitIds ?? []).filter((hid) => !removedIds.has(hid)) },
+          ]),
+        ),
+      };
+    }), []);
+  const addMasterHabit = useCallback((h: Partial<MasterHabit> & { folderId: string }): MasterHabit => {
+    const habit: MasterHabit = {
+      id: uid("hb"), folderId: h.folderId, name: h.name?.trim() || "New Habit",
+      description: h.description ?? "", icon: h.icon || "check",
+    };
+    setDb((d) => ({ ...d, masterHabits: [...d.masterHabits, habit] }));
+    return habit;
+  }, []);
+  const updateMasterHabit = useCallback((id: string, patch: Partial<MasterHabit>) =>
+    setDb((d) => ({
+      ...d,
+      masterHabits: d.masterHabits.map((h) => (h.id === id ? { ...h, ...patch } : h)),
+    })), []);
+  const removeMasterHabits = useCallback((ids: string[]) => {
+    const drop = new Set(ids);
+    setDb((d) => ({
+      ...d,
+      masterHabits: d.masterHabits.filter((h) => !drop.has(h.id)),
+      clientPlans: Object.fromEntries(
+        Object.entries(d.clientPlans).map(([cid, plan]) => [
+          cid,
+          { ...plan, habitIds: (plan.habitIds ?? []).filter((hid) => !drop.has(hid)) },
+        ]),
+      ),
+    }));
+  }, []);
+  const removeMasterHabit = useCallback((id: string) => removeMasterHabits([id]), [removeMasterHabits]);
+  const moveHabitsToFolder = useCallback((ids: string[], folderId: string) => {
+    const move = new Set(ids);
+    setDb((d) => ({
+      ...d,
+      masterHabits: d.masterHabits.map((h) => (move.has(h.id) ? { ...h, folderId } : h)),
+    }));
+  }, []);
+  // Populate the library with the starter folders/habits on an empty workspace.
+  const loadStarterHabits = useCallback(() => {
+    setDb((d) => ({
+      ...d,
+      habitFolders: d.habitFolders.length ? d.habitFolders : seedHabitFolders,
+      masterHabits: d.masterHabits.length ? d.masterHabits : seedMasterHabits,
+    }));
+  }, []);
+
+  /* ----- habit assignment (coach → client) + member check-off ----- */
+  const toggleAssignedHabit = useCallback((clientId: string, habitId: string) =>
+    setDb((d) => {
+      const plan = d.clientPlans[clientId] ?? { workoutIds: [] };
+      const current = plan.habitIds ?? [];
+      const habitIds = current.includes(habitId)
+        ? current.filter((id) => id !== habitId)
+        : [...current, habitId];
+      return { ...d, clientPlans: { ...d.clientPlans, [clientId]: { ...plan, habitIds } } };
+    }), []);
+
+  // A member ticks a habit on a given day (defaults to today). Toggling removes
+  // it. Members persist via the dedicated endpoint so the coach sees it live.
+  const toggleHabitDay = useCallback((clientId: string, habitId: string, day?: string) => {
+    const date = day ?? habitDateKey();
+    setDb((d) => {
+      const log = d.habitLogs[clientId] ?? {};
+      const dates = log[habitId] ?? [];
+      const next = dates.includes(date) ? dates.filter((x) => x !== date) : [...dates, date];
+      return { ...d, habitLogs: { ...d.habitLogs, [clientId]: { ...log, [habitId]: next } } };
+    });
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "habit", habitId, date }),
+      }).catch(() => {});
+    }
+  }, []);
+
   const completeWorkout = useCallback((clientId: string, summary: Omit<WorkoutCompletion, "id" | "date">) => {
     const completion: WorkoutCompletion = { id: uid("wc"), date: new Date().toISOString(), ...summary };
     setDb((d) => ({
@@ -711,6 +838,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
+    addHabitFolder, renameHabitFolder, removeHabitFolder,
+    addMasterHabit, updateMasterHabit, removeMasterHabit, removeMasterHabits,
+    moveHabitsToFolder, loadStarterHabits, toggleAssignedHabit, toggleHabitDay,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser,
     addBroadcast,
@@ -723,6 +853,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, setClientProgram, setClientMealPlan, completeWorkout,
+    addHabitFolder, renameHabitFolder, removeHabitFolder,
+    addMasterHabit, updateMasterHabit, removeMasterHabit, removeMasterHabits,
+    moveHabitsToFolder, loadStarterHabits, toggleAssignedHabit, toggleHabitDay,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
   ]);

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home, Dumbbell, Apple, LineChart, MessageSquare,
   Activity, CalendarCheck, GraduationCap, Trophy, ClipboardCheck, Award, UsersRound,
-  HeartPulse,
+  HeartPulse, ListChecks,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 const navToday = { href: "/client", label: "Today", icon: Home };
 const navWorkouts = { href: "/client/workouts", label: "Workouts", icon: Dumbbell };
 const navNutrition = { href: "/client/nutrition", label: "Nutrition", icon: Apple };
+const navHabits = { href: "/client/habits", label: "Habits", icon: ListChecks };
 const navProgress = { href: "/client/progress", label: "Progress", icon: LineChart };
 const navBiometrics = { href: "/client/biometrics", label: "Biometrics", icon: Activity };
 const navRecovery = { href: "/client/recovery", label: "Recovery", icon: HeartPulse };
@@ -28,7 +29,7 @@ const navCommunity = { href: "/client/community", label: "Community", icon: User
 const navCoach = { href: "/client/messages", label: "Coach", icon: MessageSquare };
 
 const nav = [
-  navToday, navWorkouts, navNutrition, navProgress, navBiometrics, navRecovery,
+  navToday, navWorkouts, navNutrition, navHabits, navProgress, navBiometrics, navRecovery,
   navChallenges, navCheckin, navSchedule, navResources, navAchievements, navCommunity, navCoach,
 ];
 

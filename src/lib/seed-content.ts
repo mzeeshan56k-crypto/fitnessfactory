@@ -1,6 +1,6 @@
 // Pre-built content library: exercises (with animation patterns), workouts,
 // program templates and coach forms. Populated fully by the seed-content build.
-import type { Exercise, Workout, Program } from "@/lib/data";
+import type { Exercise, Workout, Program, HabitFolder, MasterHabit } from "@/lib/data";
 import type { CoachForm } from "@/lib/store";
 
 /* -------------------------------------------------------------------------- */
@@ -369,4 +369,50 @@ export const prebuiltForms: CoachForm[] = [
       { id: "f6", label: "Anything else your coach should know today?", type: "long" },
     ],
   },
+];
+
+/* -------------------------------------------------------------------------- */
+/*  Master Habits library                                                      */
+/*  Folders of reusable habit templates the coach assigns to clients, who then */
+/*  check them off daily to build streaks.                                     */
+/* -------------------------------------------------------------------------- */
+
+export const seedHabitFolders: HabitFolder[] = [
+  { id: "hf_portion_guides", name: "Nutrition Portion Guides" },
+  { id: "hf_nutrition", name: "Nutrition" },
+  { id: "hf_active_living", name: "Active Living / Movement" },
+  { id: "hf_mindfulness", name: "Mindfulness" },
+  { id: "hf_sleep", name: "Sleep" },
+];
+
+export const seedMasterHabits: MasterHabit[] = [
+  // ----- Nutrition Portion Guides -----
+  { id: "hb_eat_protein", folderId: "hf_portion_guides", name: "Eat protein", icon: "protein", description: "This habit focuses on having clients consume protein with each of their meals." },
+  { id: "hb_eat_good_fats", folderId: "hf_portion_guides", name: "Eat good fats", icon: "fish", description: "This habit focuses on having clients consume good fats with each of their meals." },
+  { id: "hb_eat_complex_carbs", folderId: "hf_portion_guides", name: "Eat complex carbs", icon: "carbs", description: "This habit focuses on having clients consume complex carbs with each of their meals." },
+  { id: "hb_eat_vegetables", folderId: "hf_portion_guides", name: "Eat vegetables", icon: "salad", description: "This habit focuses on having clients consume vegetables with each of their meals." },
+
+  // ----- Nutrition -----
+  { id: "hb_eat_slowly", folderId: "hf_nutrition", name: "Practice eating slowly", icon: "timer", description: "This habit focuses on having clients practice eating slowly and highlights the importance of mindful eating." },
+  { id: "hb_eat_80", folderId: "hf_nutrition", name: "Eat until 80% full", icon: "utensils", description: "This habit focuses on mindful eating by stopping when comfortably satisfied, preventing overeating." },
+  { id: "hb_prepare_meals", folderId: "hf_nutrition", name: "Prepare your own meals", icon: "cook", description: "This habit focuses on cooking at home to allow for better portion control and healthier ingredients." },
+  { id: "hb_zero_cal_drinks", folderId: "hf_nutrition", name: "Drink only zero-calorie drinks", icon: "drink", description: "This habit focuses on reducing unnecessary sugar and calorie intake while staying hydrated." },
+
+  // ----- Active Living / Movement -----
+  { id: "hb_active_route", folderId: "hf_active_living", name: "Take a more active route", icon: "steps", description: "This habit focuses on increasing daily movement by choosing stairs or walking more throughout the day." },
+  { id: "hb_easier_workout", folderId: "hf_active_living", name: "Make it easier to workout", icon: "dumbbell", description: "This habit focuses on removing barriers to exercise by preparing workout clothes or scheduling sessions ahead of time." },
+  { id: "hb_enjoyable_activity", folderId: "hf_active_living", name: "Do an enjoyable activity", icon: "bike", description: "This habit focuses on encouraging fun activities to keep movement sustainable and engaging." },
+  { id: "hb_social_support", folderId: "hf_active_living", name: "Recruit social support", icon: "social", description: "This habit focuses on increasing consistency and motivation through accountability from friends and family." },
+
+  // ----- Mindfulness -----
+  { id: "hb_self_care", folderId: "hf_mindfulness", name: "Prioritize self-care", icon: "selfcare", description: "This habit focuses on taking time for yourself to reduce stress and improve overall well-being." },
+  { id: "hb_celebrate_wins", folderId: "hf_mindfulness", name: "Celebrate the wins", icon: "celebrate", description: "This habit focuses on acknowledging progress to keep clients motivated and reinforce positive habits." },
+  { id: "hb_practice_mindfulness", folderId: "hf_mindfulness", name: "Practice Mindfulness", icon: "mindful", description: "This habit helps your client stay present and aware, reducing stress and improving focus throughout the day." },
+  { id: "hb_journal", folderId: "hf_mindfulness", name: "Journal", icon: "journal", description: "This habit allows your client to reflect on thoughts, goals, or gratitude, enhancing self-awareness and clarity." },
+
+  // ----- Sleep -----
+  { id: "hb_consistent_bedtime", folderId: "hf_sleep", name: "Keep a consistent bedtime", icon: "sleep", description: "This habit focuses on going to bed and waking at the same time daily to stabilize the sleep-wake cycle." },
+  { id: "hb_no_screens", folderId: "hf_sleep", name: "Avoid screens before bed", icon: "moon", description: "This habit focuses on reducing blue-light exposure in the hour before bed to improve sleep quality." },
+  { id: "hb_wind_down", folderId: "hf_sleep", name: "Wind down before bed", icon: "leaf", description: "This habit focuses on a calming pre-sleep routine — stretching, reading or breathing — to ease into rest." },
+  { id: "hb_seven_hours", folderId: "hf_sleep", name: "Get 7–8 hours of sleep", icon: "star", description: "This habit focuses on prioritizing enough nightly sleep to support recovery, energy and focus." },
 ];

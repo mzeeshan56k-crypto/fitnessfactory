@@ -19,6 +19,7 @@ interface Workspace {
   photos?: Record<string, unknown>;
   nutritionLogs?: Record<string, unknown>;
   weightLogs?: Record<string, unknown>;
+  habitLogs?: Record<string, unknown>;
   settings?: Record<string, unknown>;
   [k: string]: unknown;
 }
@@ -55,6 +56,10 @@ function scopeForMember(ws: Workspace, user: { email: string; clientId?: string 
     photos: myId && ws.photos?.[myId] ? { [myId]: ws.photos[myId] } : {},
     nutritionLogs: myId && ws.nutritionLogs?.[myId] ? { [myId]: ws.nutritionLogs[myId] } : {},
     weightLogs: myId && ws.weightLogs?.[myId] ? { [myId]: ws.weightLogs[myId] } : {},
+    // The member gets only their own habit completion history. The Master
+    // Habits library (folders + templates) flows through via `...ws` so they
+    // can see the name/description/icon of habits assigned to them.
+    habitLogs: myId && ws.habitLogs?.[myId] ? { [myId]: ws.habitLogs[myId] } : {},
     settings,
     currentClientId: myId,
   };
