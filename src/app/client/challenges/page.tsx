@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Trophy, Users, Clock, Check, Flame, Star, UserPlus } from "lucide-react";
-import { leaderboard } from "@/lib/platform";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
@@ -31,7 +30,17 @@ export default function ClientChallengesPage() {
     );
 
   const challenges = app.challenges;
-  const youRow = leaderboard.find((r) => r.you);
+  const pointsFor = (id: string) => {
+    const comps = (app.completions[id] ?? []).length;
+    const cis = app.checkins.filter((c) => c.clientId === id).length;
+    const weights = (app.weightLogs[id] ?? []).length;
+    return comps * 50 + cis * 30 + weights * 10;
+  };
+  const board = app.clients
+    .map((c) => ({ id: c.id, name: c.name, avatar: c.avatar, points: pointsFor(c.id) }))
+    .sort((a, b) => b.points - a.points)
+    .map((r, i) => ({ ...r, rank: i + 1, you: r.id === client.id }));
+  const youRow = board.find((r) => r.you);
   const joinedCount = challenges.filter((c) => c.joined).length;
 
   return (
@@ -129,14 +138,14 @@ export default function ClientChallengesPage() {
           <span className="badge bg-brand-500/15 text-brand-400">This month</span>
         </div>
         <div className="space-y-2">
-          {leaderboard.length === 0 && (
+          {board.length === 0 && (
             <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-4 text-center text-sm text-ink-400">
-              No rankings yet — the leaderboard fills in as members earn points across challenges.
+              No rankings yet — points build as you log workouts, check-ins and progress.
             </p>
           )}
-          {leaderboard.map((row) => (
+          {board.map((row) => (
             <div
-              key={row.rank}
+              key={row.id}
               className={
                 row.you
                   ? "flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-500/15 p-3"

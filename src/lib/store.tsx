@@ -12,7 +12,7 @@ import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
 } from "@/lib/platform";
 import type { SessionUser } from "@/lib/auth/session";
-import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms } from "@/lib/seed-content";
+import { seedExercises, seedWorkouts, seedPrograms, prebuiltForms, prebuiltChallenges } from "@/lib/seed-content";
 import { clientAdherence, clientProgress } from "@/lib/metrics";
 
 export function uid(prefix = "id") {
@@ -144,6 +144,7 @@ interface AppContextValue extends DB {
   setCurrentClient: (id: string | null) => void;
   // exercises
   addExercise: (e: Partial<Exercise>) => Exercise;
+  updateExercise: (id: string, patch: Partial<Exercise>) => void;
   removeExercise: (id: string) => void;
   // workouts
   addWorkout: (w: Partial<Workout>) => Workout;
@@ -167,6 +168,7 @@ interface AppContextValue extends DB {
   // challenges
   addChallenge: (c: Partial<Challenge>) => void;
   toggleJoinChallenge: (id: string) => void;
+  removeChallenge: (id: string) => void;
   // ai
   resolveSuggestion: (id: string, status: "approved" | "dismissed" | "pending") => void;
   // checkins
@@ -330,6 +332,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workouts: seedWorkouts,
       programs: seedPrograms,
       forms: prebuiltForms,
+      challenges: d.challenges.length ? d.challenges : prebuiltChallenges,
     }));
   }, []);
 
@@ -395,6 +398,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDb((d) => ({ ...d, exercises: [ex, ...d.exercises] }));
     return ex;
   }, []);
+  const updateExercise = useCallback((id: string, patch: Partial<Exercise>) =>
+    setDb((d) => ({ ...d, exercises: d.exercises.map((e) => (e.id === id ? { ...e, ...patch } : e)) })), []);
   const removeExercise = useCallback((id: string) =>
     setDb((d) => ({ ...d, exercises: d.exercises.filter((e) => e.id !== id) })), []);
 
@@ -529,6 +534,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           : c,
       ),
     })), []);
+  const removeChallenge = useCallback((id: string) =>
+    setDb((d) => ({ ...d, challenges: d.challenges.filter((c) => c.id !== id) })), []);
 
   /* ----- ai ----- */
   const resolveSuggestion = useCallback((id: string, status: "approved" | "dismissed" | "pending") =>
@@ -747,14 +754,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     set, loadStarterContent, resetAll,
     addForm, updateForm, removeForm,
     addClient, updateClient, removeClient, setCurrentClient,
-    addExercise, removeExercise,
+    addExercise, updateExercise, removeExercise,
     addWorkout, updateWorkout, removeWorkout,
     addProgram, removeProgram,
     addMealPlan, removeMealPlan,
     sendMessage,
     addAppointment, removeAppointment,
     addCard, moveCard, removeCard,
-    addChallenge, toggleJoinChallenge,
+    addChallenge, toggleJoinChallenge, removeChallenge,
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
@@ -766,9 +773,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }), [
     db, clientsWithMetrics, hydrated, session, signOut, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
-    setCurrentClient, addExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
+    setCurrentClient, addExercise, updateExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
     addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
-    removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge,
+    removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge, removeChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,

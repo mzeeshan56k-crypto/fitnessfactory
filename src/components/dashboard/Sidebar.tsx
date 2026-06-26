@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Dumbbell, Apple, CalendarDays,
   MessageSquare, LineChart, Sparkles, Settings, LogOut,
   TrafficCone, KanbanSquare, ClipboardList, FileSpreadsheet, UsersRound, Megaphone,
-  ScanLine, HeartPulse, Library, GraduationCap, MessagesSquare,
+  ScanLine, HeartPulse, Library, GraduationCap, MessagesSquare, Trophy,
   Search, ChevronRight,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
@@ -42,6 +42,7 @@ const nav: NavEntry[] = [
       { href: "/dashboard/auditing", label: "Auditing", icon: TrafficCone },
       { href: "/dashboard/progress", label: "Progress", icon: LineChart },
       { href: "/dashboard/recovery", label: "Recovery", icon: HeartPulse },
+      { href: "/dashboard/challenges", label: "Challenges", icon: Trophy },
     ],
   },
   {

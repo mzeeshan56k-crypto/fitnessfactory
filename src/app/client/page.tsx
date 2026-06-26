@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {
   Dumbbell, Flame, Target, TrendingDown, ChevronRight, CheckCircle2,
-  Calendar, ClipboardCheck, Trophy, GraduationCap, UserPlus,
+  Calendar, ClipboardCheck, Trophy, GraduationCap, UserPlus, Apple,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { EmptyState } from "@/components/ui/Modal";
@@ -43,6 +43,16 @@ export default function ClientTodayPage() {
   const sessionsThisWeek = myCompletions.filter((w) => +new Date(w.date) >= weekAgo).length;
   const checkinsThisWeek = app.checkins.filter((ci) => ci.clientId === c.id && +new Date(ci.date) >= weekAgo).length;
   const lastSession = myCompletions[0];
+
+  // What the coach has assigned to this client.
+  const plan = app.clientPlans[c.id] ?? { workoutIds: [] };
+  const assignedMealPlan = app.mealPlans.find((m) => m.id === plan.mealPlanId);
+  const assignedFormsList = (plan.formIds ?? [])
+    .map((id) => app.forms.find((f) => f.id === id))
+    .filter((f): f is NonNullable<typeof f> => Boolean(f));
+  const formsToComplete = assignedFormsList.filter(
+    (f) => !app.checkins.some((ci) => ci.clientId === c.id && ci.formId === f.id),
+  );
 
   return (
     <div className="space-y-6">
@@ -106,6 +116,42 @@ export default function ClientTodayPage() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Assigned by your coach */}
+      <section className="card p-5">
+        <h2 className="font-semibold text-ink-900">Assigned to you</h2>
+        <p className="text-sm text-ink-500">Everything your coach has set up</p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <Link href="/client/workouts" className="flex items-center gap-3 rounded-xl border border-ink-100 p-3 transition hover:border-brand-500/40 hover:bg-brand-500/5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400"><Dumbbell className="h-4 w-4" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-ink-900">{assignedWorkouts.length} workout{assignedWorkouts.length === 1 ? "" : "s"}</div>
+              <div className="truncate text-xs text-ink-500">{c.program}</div>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-ink-400" />
+          </Link>
+          <Link href="/client/nutrition" className="flex items-center gap-3 rounded-xl border border-ink-100 p-3 transition hover:border-brand-500/40 hover:bg-brand-500/5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400"><Apple className="h-4 w-4" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-ink-900">{assignedMealPlan ? "Meal plan" : "No meal plan"}</div>
+              <div className="truncate text-xs text-ink-500">{assignedMealPlan ? assignedMealPlan.name : "Not assigned yet"}</div>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-ink-400" />
+          </Link>
+          <Link href="/client/forms" className="flex items-center gap-3 rounded-xl border border-ink-100 p-3 transition hover:border-brand-500/40 hover:bg-brand-500/5 sm:col-span-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-500/15 text-accent-400"><ClipboardCheck className="h-4 w-4" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-ink-900">
+                {assignedFormsList.length} form{assignedFormsList.length === 1 ? "" : "s"}
+                {formsToComplete.length > 0 && <span className="ml-2 text-brand-400">· {formsToComplete.length} to complete</span>}
+              </div>
+              <div className="truncate text-xs text-ink-500">{assignedFormsList.length ? assignedFormsList.map((f) => f.name).join(", ") : "Nothing to fill out yet"}</div>
+            </div>
+            {formsToComplete.length > 0 && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
+            <ChevronRight className="h-4 w-4 shrink-0 text-ink-400" />
+          </Link>
+        </div>
       </section>
 
       {/* Quick actions */}

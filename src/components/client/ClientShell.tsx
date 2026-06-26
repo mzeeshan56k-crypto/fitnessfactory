@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { PortalSwitcher } from "@/components/PortalSwitcher";
 import { AskAIButton } from "@/components/AIAssistant";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { ClientNotificationsBell } from "@/components/client/ClientNotificationsBell";
 import { cn } from "@/lib/utils";
 
 const navToday = { href: "/client", label: "Today", icon: Home };
@@ -57,6 +58,7 @@ export function ClientShell({
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
           <Logo />
           <div className="flex items-center gap-3">
+            <ClientNotificationsBell />
             <ThemeToggle />
             <AskAIButton compact />
             <PortalSwitcher compact />

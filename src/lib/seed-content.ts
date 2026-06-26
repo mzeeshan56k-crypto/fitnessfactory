@@ -2,6 +2,17 @@
 // program templates and coach forms. Populated fully by the seed-content build.
 import type { Exercise, Workout, Program } from "@/lib/data";
 import type { CoachForm } from "@/lib/store";
+import type { Challenge } from "@/lib/platform";
+
+/* -------------------------------------------------------------------------- */
+/*  Starter challenges                                                          */
+/* -------------------------------------------------------------------------- */
+
+export const prebuiltChallenges: Challenge[] = [
+  { id: "ch_steps", name: "10k Steps a Day", desc: "Hit 10,000 steps every day this month.", metric: "Steps", daysLeft: 30, participants: 1, joined: false, color: "from-brand-500 to-brand-700" },
+  { id: "ch_sessions", name: "12 Sessions in 30 Days", desc: "Log at least 12 training sessions this month.", metric: "Workouts", daysLeft: 30, participants: 1, joined: false, color: "from-accent-500 to-emerald-600" },
+  { id: "ch_protein", name: "Protein Streak", desc: "Hit your protein target 21 days in a row.", metric: "Nutrition", daysLeft: 21, participants: 1, joined: false, color: "from-violet-500 to-indigo-600" },
+];
 
 /* -------------------------------------------------------------------------- */
 /*  Exercises                                                                  */

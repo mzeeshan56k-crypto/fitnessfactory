@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Apple, Flame, CheckCircle2, Circle, Droplet, Plus, Minus, Utensils,
-  Sparkles, ScanLine, Camera, Trash2, X, UserPlus, BookOpen, Pill, PieChart, Check,
+  Sparkles, ScanLine, Camera, Trash2, X, UserPlus, BookOpen, Pill, PieChart, Check, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalState } from "@/lib/useLocalState";
@@ -120,21 +120,6 @@ function baselineCalories(weight: number, goal: Goal): number {
   return Math.round((w * mult) / 50) * 50; // round to nearest 50
 }
 
-// Faux scanner preset foods.
-const SCAN_FOODS = [
-  { name: "Protein bar", kcal: 210 },
-  { name: "Banana", kcal: 105 },
-  { name: "Chicken breast (150g)", kcal: 248 },
-  { name: "Greek yogurt cup", kcal: 130 },
-  { name: "Almonds (28g)", kcal: 164 },
-];
-const PHOTO_FOODS = [
-  { name: "Avocado toast", kcal: 290 },
-  { name: "Caesar salad", kcal: 360 },
-  { name: "Salmon poke bowl", kcal: 540 },
-  { name: "Oatmeal & berries", kcal: 320 },
-];
-
 export default function ClientNutritionPage() {
   const app = useApp();
   const client = useCurrentClient();
@@ -188,6 +173,55 @@ export default function ClientNutritionPage() {
 
   // Quick-log scanner panel
   const [scanner, setScanner] = useState<null | "barcode" | "photo">(null);
+  const [barcode, setBarcode] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupResult, setLookupResult] = useState<{ name: string; kcal: number } | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [qName, setQName] = useState("");
+  const [qKcal, setQKcal] = useState("");
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  // Real barcode → food lookup via the free Open Food Facts API (no key).
+  async function lookupBarcode() {
+    const code = barcode.trim();
+    if (!code) return;
+    setLookupLoading(true);
+    setLookupError(null);
+    setLookupResult(null);
+    try {
+      const r = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`);
+      const d = await r.json();
+      if (d.status !== 1 || !d.product) throw new Error("No product for that barcode — use Quick add below.");
+      const p = d.product;
+      const name = p.product_name || p.generic_name || `Item ${code}`;
+      const kcal = Math.round(Number(p.nutriments?.["energy-kcal_serving"] ?? p.nutriments?.["energy-kcal_100g"] ?? 0));
+      setLookupResult({ name, kcal });
+    } catch (e) {
+      setLookupError(e instanceof Error ? e.message : "Lookup failed — check your connection.");
+    } finally {
+      setLookupLoading(false);
+    }
+  }
+
+  function quickAdd() {
+    const name = qName.trim();
+    const kcal = Math.round(Number(qKcal));
+    if (!name || !Number.isFinite(kcal) || kcal <= 0) return;
+    addFood(name, kcal);
+    setQName("");
+    setQKcal("");
+    setLookupResult(null);
+    setBarcode("");
+    setPhotoPreview(null);
+  }
+
+  function onPhotoPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhotoPreview(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+  }
 
   // Tabs
   const [tab, setTab] = useState<NutritionTab>("diary");
@@ -450,46 +484,67 @@ export default function ClientNutritionPage() {
           </button>
         </div>
 
-        {/* Inline simulated scan result panel */}
-        {scanner && (
+        {/* Barcode lookup (real, via Open Food Facts) */}
+        {scanner === "barcode" && (
           <div className="mt-4 rounded-2xl border border-ink-100 bg-ink-50 p-4">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-sm font-semibold text-ink-800">
-                {scanner === "barcode" ? (
-                  <>
-                    <ScanLine className="h-4 w-4" /> Detected items
-                  </>
-                ) : (
-                  <>
-                    <Camera className="h-4 w-4" /> Recognized meals
-                  </>
-                )}
+                <ScanLine className="h-4 w-4" /> Barcode lookup
               </span>
-              <button
-                type="button"
-                onClick={() => setScanner(null)}
-                aria-label="Close scanner"
-                className="flex h-7 w-7 items-center justify-center rounded-full text-ink-400 transition hover:bg-ink-100 hover:text-ink-700"
-              >
+              <button type="button" onClick={() => setScanner(null)} aria-label="Close" className="flex h-7 w-7 items-center justify-center rounded-full text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className="mt-1 text-xs text-ink-500">Tap a result to add it to today&apos;s food log.</p>
-            <div className="mt-3 space-y-2">
-              {(scanner === "barcode" ? SCAN_FOODS : PHOTO_FOODS).map((f) => (
-                <button
-                  key={f.name}
-                  type="button"
-                  onClick={() => addFood(f.name, f.kcal)}
-                  className="flex w-full items-center justify-between rounded-xl border border-ink-100 bg-ink-100 px-3 py-2.5 text-left text-sm transition hover:border-brand-300 active:scale-[0.99]"
-                >
-                  <span className="font-medium text-ink-800">{f.name}</span>
-                  <span className="flex items-center gap-2 text-xs text-ink-500">
-                    {f.kcal} kcal
-                    <Plus className="h-4 w-4 text-brand-400" />
-                  </span>
-                </button>
-              ))}
+            <div className="mt-3 flex gap-2">
+              <input value={barcode} onChange={(e) => setBarcode(e.target.value)} inputMode="numeric" placeholder="Enter barcode number" className="input flex-1" onKeyDown={(e) => e.key === "Enter" && lookupBarcode()} />
+              <button onClick={lookupBarcode} disabled={!barcode.trim() || lookupLoading} className="btn-primary disabled:opacity-50">
+                {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Look up"}
+              </button>
+            </div>
+            {lookupError && <p className="mt-2 text-xs text-rose-400">{lookupError}</p>}
+            {lookupResult && (
+              <button onClick={() => { addFood(lookupResult.name, lookupResult.kcal); setLookupResult(null); setBarcode(""); }} className="mt-3 flex w-full items-center justify-between rounded-xl border border-accent-200 bg-accent-500/10 px-3 py-2.5 text-left text-sm transition hover:bg-accent-500/20">
+                <span className="font-medium text-ink-800">{lookupResult.name}</span>
+                <span className="flex items-center gap-2 text-xs text-ink-500">{lookupResult.kcal} kcal <Plus className="h-4 w-4 text-accent-500" /></span>
+              </button>
+            )}
+            <div className="mt-4 border-t border-ink-100 pt-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Quick add</div>
+              <div className="flex gap-2">
+                <input value={qName} onChange={(e) => setQName(e.target.value)} placeholder="Food name" className="input flex-1" />
+                <input value={qKcal} onChange={(e) => setQKcal(e.target.value)} inputMode="numeric" placeholder="kcal" className="input w-24" />
+                <button onClick={quickAdd} disabled={!qName.trim() || !Number(qKcal)} className="btn-primary disabled:opacity-50"><Plus className="h-4 w-4" /></button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Photo log (capture a photo, then log it) */}
+        {scanner === "photo" && (
+          <div className="mt-4 rounded-2xl border border-ink-100 bg-ink-50 p-4">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-ink-800">
+                <Camera className="h-4 w-4" /> Photo log
+              </span>
+              <button type="button" onClick={() => setScanner(null)} aria-label="Close" className="flex h-7 w-7 items-center justify-center rounded-full text-ink-400 transition hover:bg-ink-100 hover:text-ink-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <label className="mt-3 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ink-200 bg-ink-100 p-5 text-sm text-ink-500 transition hover:border-accent-300">
+              {photoPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoPreview} alt="meal" className="h-28 w-28 rounded-xl object-cover" />
+              ) : (
+                <>
+                  <Camera className="h-6 w-6" /> Take or choose a photo
+                </>
+              )}
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhotoPicked} />
+            </label>
+            <div className="mt-3 flex gap-2">
+              <input value={qName} onChange={(e) => setQName(e.target.value)} placeholder="What is it?" className="input flex-1" />
+              <input value={qKcal} onChange={(e) => setQKcal(e.target.value)} inputMode="numeric" placeholder="kcal" className="input w-24" />
+              <button onClick={quickAdd} disabled={!qName.trim() || !Number(qKcal)} className="btn-primary disabled:opacity-50"><Plus className="h-4 w-4" /></button>
             </div>
           </div>
         )}

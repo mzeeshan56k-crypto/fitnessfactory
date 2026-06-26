@@ -3,13 +3,13 @@
 import { useMemo, useState } from "react";
 import {
   Plus, Dumbbell, Layers, Library, GripVertical, Clock, Search,
-  Play, Users, Trash2, Loader2, ChevronRight, ArrowUp, ArrowDown, X, Copy,
+  Play, Users, Trash2, Loader2, ChevronRight, ArrowUp, ArrowDown, X, Copy, Pencil,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
 import { ExerciseAnimation } from "@/components/ui/ExerciseAnimation";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
-import type { Workout, WorkoutExercise } from "@/lib/data";
+import type { Workout, WorkoutExercise, Exercise } from "@/lib/data";
 import { sampleVideo } from "@/lib/media";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -60,6 +60,8 @@ export default function TrainingPage() {
   const [workoutModal, setWorkoutModal] = useState(false);
   const [programModal, setProgramModal] = useState(false);
   const [exerciseModal, setExerciseModal] = useState(false);
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
 
   // Workout form
   const [wName, setWName] = useState("");
@@ -113,18 +115,47 @@ export default function TrainingPage() {
 
   function submitWorkout() {
     if (!wName.trim()) return;
-    app.addWorkout({
-      name: wName.trim(),
-      category: wCategory.trim() || "Strength",
-      durationMin: Number(wDuration) || 45,
-      difficulty: wDifficulty,
-      exercises: [],
-    });
+    if (editingWorkoutId) {
+      app.updateWorkout(editingWorkoutId, {
+        name: wName.trim(),
+        category: wCategory.trim() || "Strength",
+        durationMin: Number(wDuration) || 45,
+        difficulty: wDifficulty,
+      });
+    } else {
+      const w = app.addWorkout({
+        name: wName.trim(),
+        category: wCategory.trim() || "Strength",
+        durationMin: Number(wDuration) || 45,
+        difficulty: wDifficulty,
+        exercises: [],
+      });
+      setSelectedId(w.id);
+    }
     setWName("");
     setWCategory("Strength");
     setWDuration("45");
     setWDifficulty("Beginner");
+    setEditingWorkoutId(null);
     setWorkoutModal(false);
+  }
+
+  function openCreateWorkout() {
+    setEditingWorkoutId(null);
+    setWName("");
+    setWCategory("Strength");
+    setWDuration("45");
+    setWDifficulty("Beginner");
+    setWorkoutModal(true);
+  }
+
+  function openEditWorkout(w: Workout) {
+    setEditingWorkoutId(w.id);
+    setWName(w.name);
+    setWCategory(w.category);
+    setWDuration(String(w.durationMin));
+    setWDifficulty(w.difficulty);
+    setWorkoutModal(true);
   }
 
   function submitProgram() {
@@ -146,7 +177,7 @@ export default function TrainingPage() {
 
   function submitExercise() {
     if (!eName.trim()) return;
-    app.addExercise({
+    const payload = {
       name: eName.trim(),
       muscle: eMuscle.trim() || "Full body",
       equipment: eEquipment.trim() || "Bodyweight",
@@ -154,7 +185,12 @@ export default function TrainingPage() {
       type: eType,
       video: eVideo.trim() || undefined,
       instructions: eInstructions.trim() || undefined,
-    });
+    };
+    if (editingExerciseId) {
+      app.updateExercise(editingExerciseId, payload);
+    } else {
+      app.addExercise(payload);
+    }
     setEName("");
     setEMuscle("");
     setEEquipment("");
@@ -162,7 +198,32 @@ export default function TrainingPage() {
     setEType("Strength");
     setEVideo("");
     setEInstructions("");
+    setEditingExerciseId(null);
     setExerciseModal(false);
+  }
+
+  function openCreateExercise() {
+    setEditingExerciseId(null);
+    setEName("");
+    setEMuscle("");
+    setEEquipment("");
+    setELevel("Beginner");
+    setEType("Strength");
+    setEVideo("");
+    setEInstructions("");
+    setExerciseModal(true);
+  }
+
+  function openEditExercise(ex: Exercise) {
+    setEditingExerciseId(ex.id);
+    setEName(ex.name);
+    setEMuscle(ex.muscle);
+    setEEquipment(ex.equipment);
+    setELevel(ex.level);
+    setEType(ex.type);
+    setEVideo(ex.video ?? "");
+    setEInstructions(ex.instructions ?? "");
+    setExerciseModal(true);
   }
 
   function addExerciseToWorkout() {
@@ -249,7 +310,7 @@ export default function TrainingPage() {
         title="Training"
         subtitle="Build programs, workouts and browse the exercise library"
         action={
-          <button className="btn-primary" onClick={() => setWorkoutModal(true)}>
+          <button className="btn-primary" onClick={openCreateWorkout}>
             <Plus className="h-4 w-4" />
             Create workout
           </button>
@@ -344,7 +405,7 @@ export default function TrainingPage() {
             title="No workouts yet"
             description="Create your first workout, then add exercises from your library."
             action={
-              <button className="btn-primary" onClick={() => setWorkoutModal(true)}>
+              <button className="btn-primary" onClick={openCreateWorkout}>
                 <Plus className="h-4 w-4" />
                 Create workout
               </button>
@@ -420,6 +481,14 @@ export default function TrainingPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openEditWorkout(selectedWorkout)}
+                      className="btn-secondary"
+                      title="Edit workout details"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </button>
                     <button
                       onClick={() => duplicateWorkout(selectedWorkout)}
                       className="btn-secondary"
@@ -600,7 +669,7 @@ export default function TrainingPage() {
                   </button>
                 );
               })}
-              <button className="btn-primary ml-1" onClick={() => setExerciseModal(true)}>
+              <button className="btn-primary ml-1" onClick={openCreateExercise}>
                 <Plus className="h-4 w-4" />
                 Add exercise
               </button>
@@ -613,7 +682,7 @@ export default function TrainingPage() {
               title="No exercises yet"
               description="Build your exercise library to use in workouts."
               action={
-                <button className="btn-primary" onClick={() => setExerciseModal(true)}>
+                <button className="btn-primary" onClick={openCreateExercise}>
                   <Plus className="h-4 w-4" />
                   Add exercise
                 </button>
@@ -648,13 +717,22 @@ export default function TrainingPage() {
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="truncate text-sm font-semibold text-ink-900">{ex.name}</h3>
-                      <button
-                        onClick={() => app.removeExercise(ex.id)}
-                        aria-label={`Remove ${ex.name}`}
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          onClick={() => openEditExercise(ex)}
+                          aria-label={`Edit ${ex.name}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => app.removeExercise(ex.id)}
+                          aria-label={`Remove ${ex.name}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                     <p className="mt-0.5 text-xs text-ink-500">
                       {ex.muscle} · {ex.equipment}
@@ -670,18 +748,18 @@ export default function TrainingPage() {
         </div>
       )}
 
-      {/* Create workout modal */}
+      {/* Create / edit workout modal */}
       <Modal
         open={workoutModal}
-        onClose={() => setWorkoutModal(false)}
-        title="Create workout"
+        onClose={() => { setWorkoutModal(false); setEditingWorkoutId(null); }}
+        title={editingWorkoutId ? "Edit workout" : "Create workout"}
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setWorkoutModal(false)}>
+            <button className="btn-secondary" onClick={() => { setWorkoutModal(false); setEditingWorkoutId(null); }}>
               Cancel
             </button>
             <button className="btn-primary" onClick={submitWorkout} disabled={!wName.trim()}>
-              Create
+              {editingWorkoutId ? "Save changes" : "Create"}
             </button>
           </>
         }
@@ -803,15 +881,15 @@ export default function TrainingPage() {
       {/* Add exercise modal */}
       <Modal
         open={exerciseModal}
-        onClose={() => setExerciseModal(false)}
-        title="Add exercise"
+        onClose={() => { setExerciseModal(false); setEditingExerciseId(null); }}
+        title={editingExerciseId ? "Edit exercise" : "Add exercise"}
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setExerciseModal(false)}>
+            <button className="btn-secondary" onClick={() => { setExerciseModal(false); setEditingExerciseId(null); }}>
               Cancel
             </button>
             <button className="btn-primary" onClick={submitExercise} disabled={!eName.trim()}>
-              Add
+              {editingExerciseId ? "Save changes" : "Add"}
             </button>
           </>
         }
