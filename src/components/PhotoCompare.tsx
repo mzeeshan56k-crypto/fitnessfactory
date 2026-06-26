@@ -31,12 +31,14 @@ export function PhotoCompare({
   const [beforeId, setBeforeId] = useState(firstId);
   const [afterId, setAfterId] = useState(lastId);
 
-  // Keep selections valid if the photos list changes.
+  // Keep selections valid and auto-advance After to the newest photo when photos grow.
   useEffect(() => {
     if (!photos.some((p) => p.id === beforeId)) setBeforeId(firstId);
-    if (!photos.some((p) => p.id === afterId)) setAfterId(lastId);
+    // Always point After at the newest photo (lastId) when photos change so
+    // uploading a second photo actually shows it as the After side.
+    setAfterId(lastId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photos]);
+  }, [photos.length]);
 
   const before = useMemo(
     () => photos.find((p) => p.id === beforeId) ?? photos[0],

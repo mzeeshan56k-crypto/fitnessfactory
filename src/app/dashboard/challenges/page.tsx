@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Trophy, Plus, Users, Clock, Trash2, Loader2 } from "lucide-react";
+import { Trophy, Plus, Users, Clock, Trash2, Loader2, CalendarCheck, ChevronDown, ChevronUp } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { useApp } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 const metrics = ["Workouts", "Steps", "Nutrition", "Weight loss", "Habits"];
 const colors = [
@@ -17,6 +18,7 @@ const colors = [
 export default function DashboardChallengesPage() {
   const app = useApp();
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [metric, setMetric] = useState(metrics[0]);
@@ -88,6 +90,36 @@ export default function DashboardChallengesPage() {
                   <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {c.daysLeft} days left</span>
                   <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {c.participants.toLocaleString()} joined</span>
                 </div>
+                {/* Client daily marks */}
+                {c.dailyMarks && Object.keys(c.dailyMarks).length > 0 && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(expanded === c.id ? null : c.id)}
+                      className="flex items-center gap-1.5 text-xs font-medium text-brand-500 hover:text-brand-600"
+                    >
+                      <CalendarCheck className="h-3.5 w-3.5" />
+                      Client progress
+                      {expanded === c.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </button>
+                    {expanded === c.id && (
+                      <div className="mt-2 space-y-1.5 rounded-xl border border-ink-200 bg-ink-50/40 p-3">
+                        {Object.entries(c.dailyMarks).map(([clientId, dates]) => {
+                          const cl = app.clients.find((x) => x.id === clientId);
+                          if (!cl || dates.length === 0) return null;
+                          return (
+                            <div key={clientId} className="flex items-center justify-between text-xs">
+                              <span className="font-medium text-ink-800">{cl.name}</span>
+                              <span className={cn("badge", "bg-accent-500/15 text-accent-500")}>
+                                {dates.length} day{dates.length !== 1 ? "s" : ""}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}

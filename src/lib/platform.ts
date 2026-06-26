@@ -192,6 +192,8 @@ export interface Challenge {
   participants: number;
   joined: boolean;
   color: string;
+  // Daily marks: Record<clientId, string[]> where each string is an ISO date (YYYY-MM-DD).
+  dailyMarks?: Record<string, string[]>;
 }
 export const challenges: Challenge[] = [
   { id: "ch1", name: "30-Day Step Streak", desc: "Hit 10,000 steps every day for 30 days.", metric: "Steps", daysLeft: 12, participants: 184, joined: true, color: "from-brand-500 to-brand-700" },

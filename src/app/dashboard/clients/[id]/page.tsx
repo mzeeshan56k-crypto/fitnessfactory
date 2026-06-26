@@ -284,7 +284,10 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: suspend ? "suspend" : "activate", email: c.email, clientId: c.id }),
       });
-      if (res.ok) setAccess(suspend ? "suspended" : "active");
+      if (res.ok) {
+        setAccess(suspend ? "suspended" : "active");
+        updateClient(c.id, { status: suspend ? "inactive" : "active" });
+      }
     } catch {
       /* ignore */
     } finally {

@@ -1,16 +1,78 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   Dumbbell, Flame, Target, TrendingDown, ChevronRight, CheckCircle2,
-  Calendar, ClipboardCheck, Trophy, GraduationCap, UserPlus, Apple,
+  Calendar, ClipboardCheck, Trophy, GraduationCap, UserPlus, Apple, X,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { EmptyState } from "@/components/ui/Modal";
+import { useLocalState } from "@/lib/useLocalState";
+
+function OnboardingModal({ onDone }: { onDone: () => void }) {
+  const app = useApp();
+  const c = useCurrentClient();
+  const [weight, setWeight] = useState("");
+  const [goal, setGoal] = useState("");
+  const [goalWeight, setGoalWeight] = useState("");
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!c) { onDone(); return; }
+    const w = Number(weight);
+    const gw = Number(goalWeight);
+    const patch: Record<string, unknown> = {};
+    if (Number.isFinite(w) && w > 0) {
+      patch.startWeight = w;
+      patch.currentWeight = w;
+      app.logWeight(c.id, w);
+    }
+    if (Number.isFinite(gw) && gw > 0) patch.goalWeight = gw;
+    if (goal.trim()) patch.goal = goal.trim();
+    if (Object.keys(patch).length > 0) app.updateClient(c.id, patch as Parameters<typeof app.updateClient>[1]);
+    onDone();
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-ink-950/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-3xl border border-ink-200 bg-ink-100 p-6 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-ink-900">Welcome! Let&rsquo;s set you up 👋</h2>
+            <p className="mt-1 text-sm text-ink-500">Fill in a few details so your coach can personalise your plan.</p>
+          </div>
+          <button type="button" onClick={onDone} className="ml-3 rounded-full p-1 text-ink-400 hover:text-ink-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="label">Current weight (lbs)</label>
+            <input type="number" inputMode="decimal" className="input" placeholder="e.g. 175" value={weight} onChange={(e) => setWeight(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Goal weight (lbs)</label>
+            <input type="number" inputMode="decimal" className="input" placeholder="e.g. 160" value={goalWeight} onChange={(e) => setGoalWeight(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">What&rsquo;s your main goal?</label>
+            <input className="input" placeholder="e.g. Lose weight, build muscle, stay active…" value={goal} onChange={(e) => setGoal(e.target.value)} />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onDone} className="btn-secondary flex-1">Skip for now</button>
+            <button type="submit" className="btn-primary flex-1">Save & continue</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export default function ClientTodayPage() {
   const app = useApp();
   const c = useCurrentClient();
+  const [onboardingDone, setOnboardingDone] = useLocalState("ffkc-onboarding-done", false);
 
   if (!app.hydrated)
     return (
@@ -54,8 +116,13 @@ export default function ClientTodayPage() {
     (f) => !app.checkins.some((ci) => ci.clientId === c.id && ci.formId === f.id),
   );
 
+  // Show onboarding modal for members who haven't filled it in yet.
+  const showOnboarding = app.session?.role === "member" && !onboardingDone;
+
   return (
-    <div className="space-y-6">
+    <>
+      {showOnboarding && <OnboardingModal onDone={() => setOnboardingDone(true)} />}
+      <div className="space-y-6">
       {/* Viewing as selector */}
       {app.clients.length >= 2 && (
         <div className="flex items-center gap-2">
@@ -247,7 +314,8 @@ export default function ClientTodayPage() {
           </section>
         );
       })()}
-    </div>
+      </div>
+    </>
   );
 }
 

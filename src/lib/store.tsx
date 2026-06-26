@@ -170,6 +170,7 @@ interface AppContextValue extends DB {
   addChallenge: (c: Partial<Challenge>) => void;
   toggleJoinChallenge: (id: string) => void;
   removeChallenge: (id: string) => void;
+  markChallengeDay: (challengeId: string, clientId: string, date: string, remove?: boolean) => void;
   // ai
   resolveSuggestion: (id: string, status: "approved" | "dismissed" | "pending") => void;
   // checkins
@@ -560,6 +561,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })), []);
   const removeChallenge = useCallback((id: string) =>
     setDb((d) => ({ ...d, challenges: d.challenges.filter((c) => c.id !== id) })), []);
+  const markChallengeDay = useCallback((challengeId: string, clientId: string, date: string, remove = false) =>
+    setDb((d) => ({
+      ...d,
+      challenges: d.challenges.map((c) => {
+        if (c.id !== challengeId) return c;
+        const prev = c.dailyMarks?.[clientId] ?? [];
+        const next = remove ? prev.filter((d) => d !== date) : [...new Set([...prev, date])];
+        return { ...c, dailyMarks: { ...(c.dailyMarks ?? {}), [clientId]: next } };
+      }),
+    })), []);
 
   /* ----- ai ----- */
   const resolveSuggestion = useCallback((id: string, status: "approved" | "dismissed" | "pending") =>
@@ -801,7 +812,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     sendMessage,
     addAppointment, removeAppointment,
     addCard, moveCard, removeCard,
-    addChallenge, toggleJoinChallenge, removeChallenge,
+    addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
@@ -815,7 +826,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addClient, updateClient, removeClient,
     setCurrentClient, addExercise, updateExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
     addProgram, updateProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
-    removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge, removeChallenge,
+    removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,

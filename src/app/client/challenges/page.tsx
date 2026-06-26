@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Trophy, Users, Clock, Check, Flame, Star, UserPlus } from "lucide-react";
+import { Trophy, Users, Clock, Check, Flame, Star, UserPlus, CalendarCheck } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
+import { cn } from "@/lib/utils";
 
 const medals: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function ClientChallengesPage() {
   const app = useApp();
@@ -42,6 +47,7 @@ export default function ClientChallengesPage() {
     .map((r, i) => ({ ...r, rank: i + 1, you: r.id === client.id }));
   const youRow = board.find((r) => r.you);
   const joinedCount = challenges.filter((c) => c.joined).length;
+  const today = todayStr();
 
   return (
     <div className="space-y-6">
@@ -83,6 +89,10 @@ export default function ClientChallengesPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {challenges.map((c) => {
               const joined = !!c.joined;
+              const marks = c.dailyMarks?.[client.id] ?? [];
+              const markedToday = marks.includes(today);
+              const totalMarks = marks.length;
+
               return (
                 <div key={c.id} className="card overflow-hidden">
                   <div className={`bg-gradient-to-br ${c.color} p-4 text-white`}>
@@ -107,6 +117,28 @@ export default function ClientChallengesPage() {
                         {c.participants.toLocaleString()} joined
                       </span>
                     </div>
+
+                    {joined && (
+                      <div className="mt-3 flex items-center justify-between rounded-xl border border-ink-200 bg-ink-50/40 px-3 py-2">
+                        <span className="flex items-center gap-1.5 text-xs text-ink-600">
+                          <CalendarCheck className="h-3.5 w-3.5 text-brand-500" />
+                          {totalMarks} day{totalMarks !== 1 ? "s" : ""} completed
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => app.markChallengeDay(c.id, client.id, today, markedToday)}
+                          className={cn(
+                            "rounded-lg px-3 py-1 text-xs font-semibold transition",
+                            markedToday
+                              ? "bg-accent-500/15 text-accent-500 hover:bg-rose-500/15 hover:text-rose-500"
+                              : "bg-brand-500 text-white hover:bg-brand-600",
+                          )}
+                        >
+                          {markedToday ? "✓ Marked today" : "Mark today ✓"}
+                        </button>
+                      </div>
+                    )}
+
                     <button
                       onClick={() => app.toggleJoinChallenge(c.id)}
                       className={
