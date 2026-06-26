@@ -9,6 +9,7 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/Modal";
 import { AdherenceRing } from "@/components/dashboard/Charts";
+import { RecentActivityFeed } from "@/components/dashboard/RecentActivityFeed";
 import { useApp, useMyClients } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -226,6 +227,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ---- Recent activity feed ---- */}
+      <RecentActivityFeed />
 
       {/* ---- Schedule + needs attention ---- */}
       <div className="grid gap-6 lg:grid-cols-3">
