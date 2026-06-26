@@ -28,6 +28,9 @@ interface CommunityPost {
 interface Challenge {
   id: string; name: string; [k: string]: unknown;
 }
+interface GymClass {
+  id: string; title: string; [k: string]: unknown;
+}
 interface WsClient {
   id: string; email: string;
   currentWeight?: number; startWeight?: number; goalWeight?: number;
@@ -45,6 +48,7 @@ interface Workspace {
   appointments?: Appointment[];
   communityPosts?: CommunityPost[];
   challenges?: Challenge[];
+  classes?: GymClass[];
   [k: string]: unknown;
 }
 
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest) {
   let body: {
     kind?:
       | "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight"
-      | "appointment" | "appointment-remove" | "appointment-book" | "community" | "challenges";
+      | "appointment" | "appointment-remove" | "appointment-book" | "community" | "challenges" | "classes";
     text?: string;
     answers?: Record<string, string | number>;
     formId?: string;
@@ -75,6 +79,7 @@ export async function POST(req: NextRequest) {
     appointmentId?: string;
     communityPosts?: CommunityPost[];
     challenges?: Challenge[];
+    classes?: GymClass[];
   };
   try {
     body = await req.json();
@@ -217,6 +222,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing challenges." }, { status: 400 });
     }
     ws.challenges = body.challenges.slice(0, 100);
+  } else if (body.kind === "classes") {
+    if (!Array.isArray(body.classes)) {
+      return NextResponse.json({ error: "Missing classes." }, { status: 400 });
+    }
+    ws.classes = body.classes.slice(0, 200);
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

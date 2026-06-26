@@ -154,6 +154,20 @@ export interface Habit {
   weekly: boolean[];
 }
 
+// A class the gym offers — live (scheduled) or recorded (on-demand). Only
+// classes the trainer creates appear in the client portal.
+export interface GymClass {
+  id: string;
+  title: string;
+  category: string;
+  durationMin: number;
+  type: "live" | "recorded";
+  date?: string; // ISO — for live classes
+  videoUrl?: string; // for recorded classes
+  thumbUrl?: string; // optional cover image
+  enrolledBy?: string[]; // client ids booked into a live class
+}
+
 // Coach documentation, persisted in the shared workspace (keyed by client id).
 export interface ClientNote {
   author: string;

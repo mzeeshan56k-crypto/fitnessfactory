@@ -6,7 +6,7 @@ import {
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
   Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto, NutritionLog,
-  WeightEntry, CommunityPost, CommunityComment,
+  WeightEntry, CommunityPost, CommunityComment, GymClass,
 } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
@@ -98,6 +98,8 @@ export interface DB {
   weightLogs: Record<string, WeightEntry[]>;
   // Shared community feed (coach + all members see the same posts).
   communityPosts: CommunityPost[];
+  // Gym classes (live + recorded) the trainer publishes.
+  classes: GymClass[];
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -115,7 +117,7 @@ const emptyDB: DB = {
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
   formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
-  nutritionLogs: {}, weightLogs: {}, communityPosts: [],
+  nutritionLogs: {}, weightLogs: {}, communityPosts: [], classes: [],
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -180,6 +182,10 @@ interface AppContextValue extends DB {
   toggleCommunityLike: (postId: string) => void;
   addCommunityComment: (postId: string, text: string) => void;
   removeCommunityPost: (postId: string) => void;
+  // classes (trainer-published)
+  addClass: (c: Partial<GymClass>) => void;
+  removeClass: (id: string) => void;
+  toggleClassEnroll: (id: string) => void;
   // ai
   resolveSuggestion: (id: string, status: "approved" | "dismissed" | "pending") => void;
   // checkins
@@ -231,6 +237,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loaded = useRef(false);
   const sessionRef = useRef<SessionUser | null>(null);
   const dbRef = useRef<DB>(db);
+  // Count of member writes currently in flight. While > 0 we don't let the
+  // background poll overwrite the member's optimistic local state (otherwise a
+  // join/like/booking briefly appears then "undoes itself" before the server
+  // has persisted it).
+  const pendingWrites = useRef(0);
   useEffect(() => {
     dbRef.current = db;
   }, [db]);
@@ -245,6 +256,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!loaded.current || !sess) return;
     // Staff bulk-save: skip if there are pending unsaved local changes.
     if (sess.role !== "member" && JSON.stringify(dbRef.current) !== lastSaved.current) return;
+    // Members: don't clobber optimistic state while a write is in flight.
+    if (sess.role === "member" && pendingWrites.current > 0) return;
     try {
       const res = await fetch("/api/workspace");
       if (!res.ok) return;
@@ -259,6 +272,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
   }, []);
+
+  // Persist a member action through the safe endpoint, holding off the poll
+  // overwrite until the write has landed, then refreshing to confirm.
+  const memberSync = useCallback((body: Record<string, unknown>) => {
+    pendingWrites.current += 1;
+    fetch("/api/member/activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .catch(() => {})
+      .finally(() => {
+        pendingWrites.current = Math.max(0, pendingWrites.current - 1);
+        refresh();
+      });
+  }, [refresh]);
 
   // Live sync: poll frequently and whenever the tab regains focus so coach and
   // member see each other's changes almost instantly.
@@ -501,13 +530,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     // A member's outgoing message is persisted server-side safely.
     if (fromClient && sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "message", text }),
-      }).catch(() => {});
+      memberSync({ kind: "message", text });
     }
-  }, []);
+  }, [memberSync]);
 
   // Resolve the signed-in member's own client id (for bookings, challenges, etc).
   const myClientId = useCallback((): string | null => {
@@ -534,25 +559,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDb((d) => ({ ...d, appointments: [...d.appointments, appt] }));
     // A member booking with their coach is persisted server-side safely so it
     // shows on the trainer's calendar too.
-    if (isMember) {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "appointment", appointment: appt }),
-      }).catch(() => {});
-    }
+    if (isMember) memberSync({ kind: "appointment", appointment: appt });
     return appt;
-  }, []);
+  }, [memberSync]);
   const removeAppointment = useCallback((id: string) => {
     setDb((d) => ({ ...d, appointments: d.appointments.filter((a) => a.id !== id) }));
     if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "appointment-remove", appointmentId: id }),
-      }).catch(() => {});
+      memberSync({ kind: "appointment-remove", appointmentId: id });
     }
-  }, []);
+  }, [memberSync]);
   // A member claims a trainer-published open slot (clientId === "").
   const bookAppointment = useCallback((id: string) => {
     const cid = myClientId();
@@ -562,13 +577,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       appointments: d.appointments.map((a) => (a.id === id ? { ...a, clientId: cid } : a)),
     }));
     if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "appointment-book", appointmentId: id }),
-      }).catch(() => {});
+      memberSync({ kind: "appointment-book", appointmentId: id });
     }
-  }, [myClientId]);
+  }, [myClientId, memberSync]);
 
   /* ----- kanban ----- */
   const addCard = useCallback((columnId: string, title: string, clientId?: string) => {
@@ -605,13 +616,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // endpoint (sends the merged array — challenges are shared and small).
   const syncChallenges = useCallback((challenges: Challenge[]) => {
     if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "challenges", challenges }),
-      }).catch(() => {});
+      memberSync({ kind: "challenges", challenges });
     }
-  }, []);
+  }, [memberSync]);
 
   const addChallenge = useCallback((c: Partial<Challenge>) => {
     const ch: Challenge = {
@@ -677,13 +684,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const syncCommunity = useCallback((posts: CommunityPost[]) => {
     // Members can't PUT the workspace, so persist the feed via the safe endpoint.
     if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "community", communityPosts: posts }),
-      }).catch(() => {});
+      memberSync({ kind: "community", communityPosts: posts });
     }
-  }, []);
+  }, [memberSync]);
 
   const addCommunityPost = useCallback((text: string) => {
     const body = text.trim();
@@ -737,6 +740,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [syncCommunity]);
 
+  /* ----- classes (trainer-published, shared) ----- */
+  const syncClasses = useCallback((classes: GymClass[]) => {
+    if (sessionRef.current?.role === "member") memberSync({ kind: "classes", classes });
+  }, [memberSync]);
+
+  const addClass = useCallback((c: Partial<GymClass>) => {
+    const cls: GymClass = {
+      id: uid("cls"), title: c.title ?? "New Class", category: c.category ?? "General",
+      durationMin: c.durationMin ?? 30, type: c.type ?? "live",
+      ...(c.date ? { date: c.date } : {}),
+      ...(c.videoUrl ? { videoUrl: c.videoUrl } : {}),
+      ...(c.thumbUrl ? { thumbUrl: c.thumbUrl } : {}),
+      enrolledBy: [],
+    };
+    setDb((d) => ({ ...d, classes: [cls, ...d.classes] }));
+  }, []);
+
+  const removeClass = useCallback((id: string) =>
+    setDb((d) => ({ ...d, classes: d.classes.filter((c) => c.id !== id) })), []);
+
+  const toggleClassEnroll = useCallback((id: string) => {
+    const cid = myClientId();
+    if (!cid) return;
+    setDb((d) => {
+      const classes = d.classes.map((c) => {
+        if (c.id !== id) return c;
+        const enrolled = c.enrolledBy ?? [];
+        const isIn = enrolled.includes(cid);
+        return { ...c, enrolledBy: isIn ? enrolled.filter((x) => x !== cid) : [...enrolled, cid] };
+      });
+      syncClasses(classes);
+      return { ...d, classes };
+    });
+  }, [myClientId, syncClasses]);
+
   /* ----- ai ----- */
   const resolveSuggestion = useCallback((id: string, status: "approved" | "dismissed" | "pending") =>
     setDb((d) => ({
@@ -772,15 +810,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         : {}),
     }));
     if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "checkin", answers, formId: meta?.formId, formName: meta?.formName }),
-      })
-        .then(() => refresh())
-        .catch(() => {});
+      memberSync({ kind: "checkin", answers, formId: meta?.formId, formName: meta?.formName });
     }
-  }, [refresh]);
+  }, [memberSync]);
 
   /* ----- coach documentation ----- */
   const addFormReview = useCallback((clientId: string, review: FormReview) =>
@@ -848,15 +880,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
     // Members persist via the dedicated endpoint (they can't bulk-save).
     if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "workout", completion: summary }),
-      })
-        .then(() => refresh())
-        .catch(() => {});
+      memberSync({ kind: "workout", completion: summary });
     }
-  }, [refresh]);
+  }, [memberSync]);
 
   /* ----- progress photos ----- */
   const addPhoto = useCallback((clientId: string, url: string) => {
@@ -867,24 +893,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       url,
     };
     setDb((d) => ({ ...d, photos: { ...d.photos, [clientId]: [...(d.photos[clientId] ?? []), photo] } }));
-    if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "photo", photo }),
-      }).catch(() => {});
-    }
-  }, []);
+    if (sessionRef.current?.role === "member") memberSync({ kind: "photo", photo });
+  }, [memberSync]);
   const removePhoto = useCallback((clientId: string, id: string) => {
     setDb((d) => ({ ...d, photos: { ...d.photos, [clientId]: (d.photos[clientId] ?? []).filter((p) => p.id !== id) } }));
-    if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "photo-remove", photoId: id }),
-      }).catch(() => {});
-    }
-  }, []);
+    if (sessionRef.current?.role === "member") memberSync({ kind: "photo-remove", photoId: id });
+  }, [memberSync]);
 
   /* ----- member bodyweight log ----- */
   const logWeight = useCallback((clientId: string, weight: number) => {
@@ -895,16 +909,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Headline weight drives derived progress; just store it + stamp activity.
       clients: d.clients.map((c) => (c.id === clientId ? { ...c, currentWeight: weight, lastActive: "Just now" } : c)),
     }));
-    if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "weight", weight }),
-      })
-        .then(() => refresh())
-        .catch(() => {});
-    }
-  }, [refresh]);
+    if (sessionRef.current?.role === "member") memberSync({ kind: "weight", weight });
+  }, [memberSync]);
 
   /* ----- trainer assignment (admin) ----- */
   const assignCoach = useCallback((clientId: string, coachEmail: string, coachName: string) =>
@@ -919,14 +925,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const setNutritionLog = useCallback((clientId: string, log: NutritionLog) => {
     const stamped: NutritionLog = { ...log, updatedAt: Date.now() };
     setDb((d) => ({ ...d, nutritionLogs: { ...d.nutritionLogs, [clientId]: stamped } }));
-    if (sessionRef.current?.role === "member") {
-      fetch("/api/member/activity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "nutrition", log: stamped }),
-      }).catch(() => {});
-    }
-  }, []);
+    if (sessionRef.current?.role === "member") memberSync({ kind: "nutrition", log: stamped });
+  }, [memberSync]);
 
   /* ----- users ----- */
   const addUser = useCallback((u: Partial<PlatformUser>) => {
@@ -980,6 +980,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addCard, moveCard, removeCard,
     addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
     addCommunityPost, toggleCommunityLike, addCommunityComment, removeCommunityPost,
+    addClass, removeClass, toggleClassEnroll,
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
@@ -995,6 +996,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addProgram, updateProgram, removeProgram, addMealPlan, updateMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, bookAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
     addCommunityPost, toggleCommunityLike, addCommunityComment, removeCommunityPost,
+    addClass, removeClass, toggleClassEnroll,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,

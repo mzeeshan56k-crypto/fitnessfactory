@@ -4,12 +4,15 @@ import { useMemo, useState } from "react";
 import {
   Plus, Dumbbell, Layers, Library, GripVertical, Clock, Search,
   Play, Users, Trash2, Loader2, ChevronRight, ArrowUp, ArrowDown, X, Copy, Pencil,
+  Eye, UserPlus, Check,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
 import { ExerciseAnimation } from "@/components/ui/ExerciseAnimation";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { MediaEditor } from "@/components/MediaEditor";
+import { MediaGallery } from "@/components/MediaGallery";
+import { Avatar } from "@/components/ui/Avatar";
 import type { Workout, WorkoutExercise, Exercise, Program, TrainingMedia } from "@/lib/data";
 import { sampleVideo } from "@/lib/media";
 import { useApp } from "@/lib/store";
@@ -64,6 +67,8 @@ export default function TrainingPage() {
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const [editingProgramId, setEditingProgramId] = useState<string | null>(null);
+  const [viewProgramId, setViewProgramId] = useState<string | null>(null);
+  const [assignProgramId, setAssignProgramId] = useState<string | null>(null);
 
   // Workout form
   const [wName, setWName] = useState("");
@@ -420,14 +425,23 @@ export default function TrainingPage() {
             />
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {app.programs.map((p) => (
+              {app.programs.map((p) => {
+                const cover = p.media?.find((m) => m.type === "image");
+                const assignedCount = app.clients.filter((c) => app.clientPlans[c.id]?.programId === p.id).length;
+                return (
                 <div key={p.id} className="card overflow-hidden">
-                  <div className={cn("relative h-28 bg-gradient-to-br p-4 text-white", p.color)}>
-                    <span className="badge bg-white/20 text-white backdrop-blur-sm">
-                      {p.focus}
-                    </span>
-                    <Dumbbell className="absolute bottom-3 right-3 h-10 w-10 text-white/25" />
-                  </div>
+                  <button onClick={() => setViewProgramId(p.id)} className="block w-full text-left">
+                    <div className={cn("relative h-28 bg-gradient-to-br p-4 text-white", !cover && p.color)}>
+                      {cover && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={cover.url} alt={p.name} className="absolute inset-0 h-full w-full object-cover" />
+                      )}
+                      <span className="relative badge bg-black/30 text-white backdrop-blur-sm">
+                        {p.focus}
+                      </span>
+                      {!cover && <Dumbbell className="absolute bottom-3 right-3 h-10 w-10 text-white/25" />}
+                    </div>
+                  </button>
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-semibold text-ink-900">{p.name}</h3>
@@ -453,11 +467,20 @@ export default function TrainingPage() {
                     </p>
                     <div className="mt-3 flex items-center gap-1.5 text-xs text-ink-500">
                       <Users className="h-3.5 w-3.5" />
-                      {p.clientsAssigned} clients assigned
+                      {assignedCount} {assignedCount === 1 ? "client" : "clients"} assigned
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <button onClick={() => setViewProgramId(p.id)} className="btn-secondary flex-1 py-2 text-sm">
+                        <Eye className="h-4 w-4" /> View
+                      </button>
+                      <button onClick={() => setAssignProgramId(p.id)} className="btn-primary flex-1 py-2 text-sm">
+                        <UserPlus className="h-4 w-4" /> Assign
+                      </button>
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
@@ -1060,6 +1083,108 @@ export default function TrainingPage() {
           </Field>
         </div>
       </Modal>
+
+      {/* View program modal */}
+      {(() => {
+        const p = app.programs.find((x) => x.id === viewProgramId);
+        if (!p) return null;
+        const workouts = (p.workoutIds ?? [])
+          .map((id) => app.workouts.find((w) => w.id === id))
+          .filter((w): w is Workout => Boolean(w));
+        return (
+          <Modal
+            open={!!viewProgramId}
+            onClose={() => setViewProgramId(null)}
+            title={p.name}
+            size="lg"
+            footer={
+              <>
+                <button className="btn-secondary" onClick={() => setViewProgramId(null)}>Close</button>
+                <button className="btn-primary" onClick={() => { setAssignProgramId(p.id); setViewProgramId(null); }}>
+                  <UserPlus className="h-4 w-4" /> Assign to client
+                </button>
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-ink-500">
+                <span className="badge bg-brand-500/15 text-brand-400">{p.focus}</span>
+                <span>{p.weeks} weeks · {p.workoutsPerWeek}×/wk</span>
+              </div>
+              {p.instructions && (
+                <div className="rounded-xl border border-ink-100 bg-ink-50/50 p-4 text-sm text-ink-700">
+                  {p.instructions}
+                </div>
+              )}
+              {p.media && p.media.length > 0 && <MediaGallery media={p.media} />}
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-ink-900">Workouts in this program</h3>
+                {workouts.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-4 text-center text-sm text-ink-400">
+                    No workouts added yet. Edit the program to add workouts.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {workouts.map((w) => (
+                      <div key={w.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
+                          <Dumbbell className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-ink-900">{w.name}</div>
+                          <div className="text-xs text-ink-400">{w.durationMin} min · {w.exercises.length} exercises</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {/* Assign program modal */}
+      {(() => {
+        const p = app.programs.find((x) => x.id === assignProgramId);
+        if (!p) return null;
+        return (
+          <Modal
+            open={!!assignProgramId}
+            onClose={() => setAssignProgramId(null)}
+            title={`Assign "${p.name}"`}
+            footer={<button className="btn-primary" onClick={() => setAssignProgramId(null)}>Done</button>}
+          >
+            <div className="space-y-2">
+              {app.clients.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-4 text-center text-sm text-ink-400">
+                  No clients yet. Add a client first.
+                </p>
+              ) : (
+                app.clients.map((c) => {
+                  const assigned = app.clientPlans[c.id]?.programId === p.id;
+                  return (
+                    <div key={c.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
+                      <Avatar initials={c.avatar} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-ink-900">{c.name}</div>
+                        <div className="truncate text-xs text-ink-400">{c.email}</div>
+                      </div>
+                      <button
+                        onClick={() => app.setClientProgram(c.id, p.id)}
+                        disabled={assigned}
+                        className={assigned ? "btn-secondary px-3 py-1.5 text-sm" : "btn-primary px-3 py-1.5 text-sm"}
+                      >
+                        {assigned ? <><Check className="h-3.5 w-3.5" /> Assigned</> : "Assign"}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
 
       <VideoModal
         open={!!video}

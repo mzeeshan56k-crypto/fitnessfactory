@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Bell, FileText, Dumbbell, Apple, MessageSquare, CalendarCheck,
+  Bell, FileText, Dumbbell, Apple, MessageSquare, CalendarCheck, Layers, Video,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -41,12 +41,18 @@ export function ClientNotificationsBell() {
       )
     : [];
   const assignedWorkoutIds = plan.workoutIds ?? [];
+  const program = plan.programId ? app.programs.find((p) => p.id === plan.programId) : undefined;
   const mealPlan = app.mealPlans.find((m) => m.id === plan.mealPlanId);
   const conv = client ? app.conversations.find((c) => c.clientId === client.id) : undefined;
   const lastCoach = conv?.messages.filter((m) => !m.fromClient).slice(-1)[0];
   const nextAppt = client ? app.appointments.find((a) => a.clientId === client.id) : undefined;
+  const liveClasses = client ? app.classes.filter((c) => c.type === "live") : [];
 
   const items: Item[] = [];
+  // Assigned training program (shows the moment a coach assigns one).
+  if (program) {
+    items.push({ id: "prog_" + program.id, icon: Layers, tint: "bg-brand-500/15 text-brand-400", title: `Program assigned: ${program.name}`, sub: `${program.weeks} weeks · ${program.workoutsPerWeek}×/wk`, href: "/client/workouts" });
+  }
   // Each assigned workout is its own notification so newly-assigned ones show up.
   for (const id of assignedWorkoutIds) {
     const w = app.workouts.find((x) => x.id === id);
@@ -64,6 +70,9 @@ export function ClientNotificationsBell() {
   }
   if (nextAppt) {
     items.push({ id: "appt_" + nextAppt.id, icon: CalendarCheck, tint: "bg-violet-500/15 text-violet-400", title: nextAppt.title, sub: `${nextAppt.start} – ${nextAppt.end}`, href: "/client/schedule" });
+  }
+  for (const cls of liveClasses) {
+    items.push({ id: "cls_" + cls.id, icon: Video, tint: "bg-rose-500/15 text-rose-400", title: `Class: ${cls.title}`, sub: `${cls.durationMin} min · ${cls.category}`, href: "/client/classes" });
   }
 
   const seenSet = new Set(seen);
