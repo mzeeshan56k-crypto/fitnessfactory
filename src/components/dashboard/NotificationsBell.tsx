@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, ClipboardCheck, Dumbbell, MessageSquare, CheckCheck } from "lucide-react";
+import { Bell, ClipboardCheck, Dumbbell, MessageSquare, CheckCheck, Apple } from "lucide-react";
 import { useApp, useMyClients } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { useLocalState } from "@/lib/useLocalState";
 
 type Notif = {
   id: string;
-  kind: "checkin" | "workout" | "message";
+  kind: "checkin" | "workout" | "message" | "nutrition";
   title: string;
   sub: string;
   href: string;
@@ -20,12 +20,14 @@ const ICONS = {
   checkin: ClipboardCheck,
   workout: Dumbbell,
   message: MessageSquare,
+  nutrition: Apple,
 } as const;
 
 const TINTS = {
   checkin: "bg-accent-500/15 text-accent-400",
   workout: "bg-brand-500/15 text-brand-400",
   message: "bg-sky-500/15 text-sky-400",
+  nutrition: "bg-amber-500/15 text-amber-400",
 } as const;
 
 export function NotificationsBell() {
@@ -75,6 +77,21 @@ export function NotificationsBell() {
         ts: +new Date(w.date),
       });
     }
+  }
+  for (const c of clients) {
+    const log = app.nutritionLogs[c.id];
+    if (!log?.updatedAt) continue;
+    const logged = log.logged?.length ?? 0;
+    const food = log.foodLog?.length ?? 0;
+    if (logged === 0 && food === 0) continue;
+    notifs.push({
+      id: "nut_" + c.id + "_" + log.updatedAt,
+      kind: "nutrition",
+      title: `${c.name} logged their nutrition`,
+      sub: `${logged} meal${logged === 1 ? "" : "s"}${food ? ` · ${food} food item${food === 1 ? "" : "s"}` : ""}`,
+      href: `/dashboard/clients/${c.id}`,
+      ts: log.updatedAt,
+    });
   }
   for (const conv of app.conversations) {
     if (conv.unread <= 0 || !ids.has(conv.clientId)) continue;

@@ -15,15 +15,18 @@ interface Completion {
 }
 interface Photo { id: string; label: string; date: string; url: string }
 interface FoodEntry { id: string; name: string; kcal: number }
-interface NutritionLog { water: number; foodLog: FoodEntry[]; logged: string[] }
+interface NutritionLog { water: number; foodLog: FoodEntry[]; logged: string[]; updatedAt?: number }
 interface WeightEntry { date: string; weight: number }
 interface Appointment {
-  id: string; title: string; clientId: string; day: number;
+  id: string; title: string; clientId: string; day: number; date?: string;
   start: string; end: string; type: string; requestedByClient?: boolean;
 }
 interface CommunityPost {
   id: string; author: string; avatar: string; coach: boolean;
   text: string; ts: number; likedBy: string[]; comments: unknown[];
+}
+interface Challenge {
+  id: string; name: string; [k: string]: unknown;
 }
 interface WsClient {
   id: string; email: string;
@@ -41,6 +44,7 @@ interface Workspace {
   clientPlans?: Record<string, { workoutIds?: string[] }>;
   appointments?: Appointment[];
   communityPosts?: CommunityPost[];
+  challenges?: Challenge[];
   [k: string]: unknown;
 }
 
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
   let body: {
     kind?:
       | "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight"
-      | "appointment" | "appointment-remove" | "community";
+      | "appointment" | "appointment-remove" | "appointment-book" | "community" | "challenges";
     text?: string;
     answers?: Record<string, string | number>;
     formId?: string;
@@ -70,6 +74,7 @@ export async function POST(req: NextRequest) {
     appointment?: Partial<Appointment>;
     appointmentId?: string;
     communityPosts?: CommunityPost[];
+    challenges?: Challenge[];
   };
   try {
     body = await req.json();
@@ -157,6 +162,7 @@ export async function POST(req: NextRequest) {
       water: Number(log.water) || 0,
       foodLog: Array.isArray(log.foodLog) ? log.foodLog.slice(0, 200) : [],
       logged: Array.isArray(log.logged) ? log.logged.slice(0, 100) : [],
+      updatedAt: Number(log.updatedAt) || Date.now(),
     };
     ws.nutritionLogs = { ...(ws.nutritionLogs ?? {}), [mine.id]: safe };
   } else if (body.kind === "weight") {
@@ -177,6 +183,7 @@ export async function POST(req: NextRequest) {
       title: String(a.title || "Session"),
       clientId: mine.id,
       day: Number(a.day ?? 0),
+      ...(a.date ? { date: String(a.date) } : {}),
       start: String(a.start || "09:00"),
       end: String(a.end || "10:00"),
       type: String(a.type || "session"),
@@ -191,12 +198,25 @@ export async function POST(req: NextRequest) {
     ws.appointments = (ws.appointments ?? []).filter(
       (x) => !(x.id === body.appointmentId && x.clientId === mine.id),
     );
+  } else if (body.kind === "appointment-book") {
+    // Member claims an open slot (clientId === "") — assign it to themselves.
+    ws.appointments = (ws.appointments ?? []).map((x) =>
+      x.id === body.appointmentId && (!x.clientId || x.clientId === "")
+        ? { ...x, clientId: mine.id, requestedByClient: true }
+        : x,
+    );
   } else if (body.kind === "community") {
     // The whole feed is shared; trust the client's merged copy but cap size.
     if (!Array.isArray(body.communityPosts)) {
       return NextResponse.json({ error: "Missing posts." }, { status: 400 });
     }
     ws.communityPosts = body.communityPosts.slice(0, 200);
+  } else if (body.kind === "challenges") {
+    // Challenges are shared; persist the member's merged copy (join + marks).
+    if (!Array.isArray(body.challenges)) {
+      return NextResponse.json({ error: "Missing challenges." }, { status: 400 });
+    }
+    ws.challenges = body.challenges.slice(0, 100);
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

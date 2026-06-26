@@ -1,10 +1,20 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImagePlus, Video, X, Loader2, Link2 } from "lucide-react";
+import { ImagePlus, Video, X, Loader2, Link2, FileText } from "lucide-react";
 import type { TrainingMedia } from "@/lib/data";
 import { fileToDataUrl } from "@/components/ui/ImageUpload";
 import { uid } from "@/lib/store";
+
+/** Reads any file as a raw data URL (no canvas downscaling — used for PDFs). */
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
 
 /** Editor for the pictures + videos a trainer attaches to a workout / program. */
 export function MediaEditor({
@@ -15,33 +25,53 @@ export function MediaEditor({
   onChange: (m: TrainingMedia[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
+
+  async function upload(dataUrl: string): Promise<string> {
+    // Upload to Blob when configured; falls back to the data URL otherwise.
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl }),
+      });
+      const data = await res.json();
+      if (data.url) return data.url;
+    } catch {
+      /* keep data URL */
+    }
+    return dataUrl;
+  }
 
   async function handleImage(file?: File) {
     if (!file) return;
     setUploading(true);
     try {
       const dataUrl = await fileToDataUrl(file, 1080, 0.78);
-      // Upload to Blob when configured; falls back to the data URL otherwise.
-      let url = dataUrl;
-      try {
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dataUrl }),
-        });
-        const data = await res.json();
-        if (data.url) url = data.url;
-      } catch {
-        /* keep data URL */
-      }
+      const url = await upload(dataUrl);
       onChange([...media, { id: uid("md"), type: "image", url }]);
     } catch {
       /* ignore */
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function handlePdf(file?: File) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await readAsDataUrl(file);
+      const url = await upload(dataUrl);
+      onChange([...media, { id: uid("md"), type: "pdf", url, name: file.name }]);
+    } catch {
+      /* ignore */
+    } finally {
+      setUploading(false);
+      if (pdfRef.current) pdfRef.current.value = "";
     }
   }
 
@@ -65,6 +95,11 @@ export function MediaEditor({
               {m.type === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={m.url} alt="attachment" className="aspect-video w-full object-cover" />
+              ) : m.type === "pdf" ? (
+                <div className="flex aspect-video w-full flex-col items-center justify-center gap-1 bg-ink-50 p-2 text-center">
+                  <FileText className="h-5 w-5 text-rose-500" />
+                  <span className="line-clamp-2 break-all text-[10px] text-ink-500">{m.name || "PDF"}</span>
+                </div>
               ) : (
                 <div className="flex aspect-video w-full flex-col items-center justify-center gap-1 bg-ink-50 p-2 text-center">
                   <Video className="h-5 w-5 text-brand-400" />
@@ -100,6 +135,21 @@ export function MediaEditor({
           accept="image/*"
           className="hidden"
           onChange={(e) => handleImage(e.target.files?.[0])}
+        />
+        <button
+          type="button"
+          onClick={() => pdfRef.current?.click()}
+          disabled={uploading}
+          className="btn-secondary"
+        >
+          <FileText className="h-4 w-4" /> Add PDF
+        </button>
+        <input
+          ref={pdfRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={(e) => handlePdf(e.target.files?.[0])}
         />
       </div>
 

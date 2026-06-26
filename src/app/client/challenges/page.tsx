@@ -46,7 +46,9 @@ export default function ClientChallengesPage() {
     .sort((a, b) => b.points - a.points)
     .map((r, i) => ({ ...r, rank: i + 1, you: r.id === client.id }));
   const youRow = board.find((r) => r.you);
-  const joinedCount = challenges.filter((c) => c.joined).length;
+  const isJoined = (c: (typeof challenges)[number]) =>
+    (c.joinedBy ?? []).includes(client.id) || (!c.joinedBy && c.joined);
+  const joinedCount = challenges.filter(isJoined).length;
   const today = todayStr();
 
   return (
@@ -88,7 +90,7 @@ export default function ClientChallengesPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {challenges.map((c) => {
-              const joined = !!c.joined;
+              const joined = isJoined(c);
               const marks = c.dailyMarks?.[client.id] ?? [];
               const markedToday = marks.includes(today);
               const totalMarks = marks.length;
@@ -114,7 +116,7 @@ export default function ClientChallengesPage() {
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Users className="h-3.5 w-3.5" />{" "}
-                        {c.participants.toLocaleString()} joined
+                        {(c.joinedBy?.length ?? c.participants).toLocaleString()} joined
                       </span>
                     </div>
 

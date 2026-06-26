@@ -158,12 +158,14 @@ interface AppContextValue extends DB {
   removeProgram: (id: string) => void;
   // meal plans
   addMealPlan: (m: Partial<MealPlan>) => MealPlan;
+  updateMealPlan: (id: string, patch: Partial<MealPlan>) => void;
   removeMealPlan: (id: string) => void;
   // messaging
   sendMessage: (clientId: string, text: string, fromClient: boolean) => void;
   // appointments
   addAppointment: (a: Partial<Appointment>) => Appointment;
   removeAppointment: (id: string) => void;
+  bookAppointment: (id: string) => void;
   // kanban
   addCard: (columnId: string, title: string, clientId?: string) => void;
   moveCard: (cardId: string, toColumnId: string) => void;
@@ -262,7 +264,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // member see each other's changes almost instantly.
   useEffect(() => {
     if (!hydrated || !session) return;
-    const id = window.setInterval(refresh, 2500);
+    const id = window.setInterval(refresh, 1500);
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -470,10 +472,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: uid("m"), name: m.name ?? "New Meal Plan", calories: m.calories ?? 2000,
       protein: m.protein ?? 150, carbs: m.carbs ?? 200, fat: m.fat ?? 60,
       meals: m.meals ?? [], tag: m.tag ?? "Custom",
+      ...(m.media ? { media: m.media } : {}),
     };
     setDb((d) => ({ ...d, mealPlans: [plan, ...d.mealPlans] }));
     return plan;
   }, []);
+  const updateMealPlan = useCallback((id: string, patch: Partial<MealPlan>) =>
+    setDb((d) => ({ ...d, mealPlans: d.mealPlans.map((m) => (m.id === id ? { ...m, ...patch } : m)) })), []);
   const removeMealPlan = useCallback((id: string) =>
     setDb((d) => ({ ...d, mealPlans: d.mealPlans.filter((m) => m.id !== id) })), []);
 
@@ -504,6 +509,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Resolve the signed-in member's own client id (for bookings, challenges, etc).
+  const myClientId = useCallback((): string | null => {
+    const sess = sessionRef.current;
+    if (sess?.role !== "member") return dbRef.current.currentClientId;
+    const d = dbRef.current;
+    return (
+      d.clients.find((x) => x.id === sess.clientId)?.id ??
+      d.clients.find((x) => x.email.toLowerCase() === sess.email.toLowerCase())?.id ??
+      null
+    );
+  }, []);
+
   /* ----- appointments ----- */
   const addAppointment = useCallback((a: Partial<Appointment>): Appointment => {
     const isMember = sessionRef.current?.role === "member";
@@ -511,6 +528,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: uid("a"), title: a.title ?? "New Event", clientId: a.clientId ?? "",
       day: a.day ?? 0, start: a.start ?? "09:00", end: a.end ?? "10:00",
       type: a.type ?? "session",
+      ...(a.date ? { date: a.date } : {}),
       ...(a.requestedByClient || isMember ? { requestedByClient: true } : {}),
     };
     setDb((d) => ({ ...d, appointments: [...d.appointments, appt] }));
@@ -535,6 +553,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }).catch(() => {});
     }
   }, []);
+  // A member claims a trainer-published open slot (clientId === "").
+  const bookAppointment = useCallback((id: string) => {
+    const cid = myClientId();
+    if (!cid) return;
+    setDb((d) => ({
+      ...d,
+      appointments: d.appointments.map((a) => (a.id === id ? { ...a, clientId: cid } : a)),
+    }));
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "appointment-book", appointmentId: id }),
+      }).catch(() => {});
+    }
+  }, [myClientId]);
 
   /* ----- kanban ----- */
   const addCard = useCallback((columnId: string, title: string, clientId?: string) => {
@@ -567,36 +601,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })), []);
 
   /* ----- challenges ----- */
+  // Members can't PUT the workspace, so challenge changes persist via the safe
+  // endpoint (sends the merged array — challenges are shared and small).
+  const syncChallenges = useCallback((challenges: Challenge[]) => {
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "challenges", challenges }),
+      }).catch(() => {});
+    }
+  }, []);
+
   const addChallenge = useCallback((c: Partial<Challenge>) => {
     const ch: Challenge = {
       id: uid("ch"), name: c.name ?? "New Challenge", desc: c.desc ?? "",
       metric: c.metric ?? "Workouts", daysLeft: c.daysLeft ?? 30,
-      participants: c.participants ?? 1, joined: c.joined ?? true,
+      participants: c.participants ?? 0, joined: false, joinedBy: [],
       color: c.color ?? "from-brand-500 to-brand-700",
     };
     setDb((d) => ({ ...d, challenges: [ch, ...d.challenges] }));
   }, []);
-  const toggleJoinChallenge = useCallback((id: string) =>
-    setDb((d) => ({
-      ...d,
-      challenges: d.challenges.map((c) =>
-        c.id === id
-          ? { ...c, joined: !c.joined, participants: c.participants + (c.joined ? -1 : 1) }
-          : c,
-      ),
-    })), []);
+
+  const toggleJoinChallenge = useCallback((id: string) => {
+    const cid = myClientId();
+    if (!cid) return;
+    setDb((d) => {
+      const challenges = d.challenges.map((c) => {
+        if (c.id !== id) return c;
+        const joinedBy = c.joinedBy ?? [];
+        const isIn = joinedBy.includes(cid);
+        const nextJoined = isIn ? joinedBy.filter((x) => x !== cid) : [...joinedBy, cid];
+        return { ...c, joinedBy: nextJoined, joined: nextJoined.length > 0 };
+      });
+      syncChallenges(challenges);
+      return { ...d, challenges };
+    });
+  }, [myClientId, syncChallenges]);
+
   const removeChallenge = useCallback((id: string) =>
     setDb((d) => ({ ...d, challenges: d.challenges.filter((c) => c.id !== id) })), []);
-  const markChallengeDay = useCallback((challengeId: string, clientId: string, date: string, remove = false) =>
-    setDb((d) => ({
-      ...d,
-      challenges: d.challenges.map((c) => {
+
+  const markChallengeDay = useCallback((challengeId: string, clientId: string, date: string, remove = false) => {
+    setDb((d) => {
+      const challenges = d.challenges.map((c) => {
         if (c.id !== challengeId) return c;
         const prev = c.dailyMarks?.[clientId] ?? [];
-        const next = remove ? prev.filter((d) => d !== date) : [...new Set([...prev, date])];
+        const next = remove ? prev.filter((x) => x !== date) : [...new Set([...prev, date])];
         return { ...c, dailyMarks: { ...(c.dailyMarks ?? {}), [clientId]: next } };
-      }),
-    })), []);
+      });
+      syncChallenges(challenges);
+      return { ...d, challenges };
+    });
+  }, [syncChallenges]);
 
   /* ----- community feed (shared coach ↔ members) ----- */
   // Identify who is posting/liking right now (member → their client record,
@@ -860,12 +917,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   /* ----- member nutrition diary ----- */
   const setNutritionLog = useCallback((clientId: string, log: NutritionLog) => {
-    setDb((d) => ({ ...d, nutritionLogs: { ...d.nutritionLogs, [clientId]: log } }));
+    const stamped: NutritionLog = { ...log, updatedAt: Date.now() };
+    setDb((d) => ({ ...d, nutritionLogs: { ...d.nutritionLogs, [clientId]: stamped } }));
     if (sessionRef.current?.role === "member") {
       fetch("/api/member/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "nutrition", log }),
+        body: JSON.stringify({ kind: "nutrition", log: stamped }),
       }).catch(() => {});
     }
   }, []);
@@ -916,9 +974,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addExercise, updateExercise, removeExercise,
     addWorkout, updateWorkout, removeWorkout,
     addProgram, updateProgram, removeProgram,
-    addMealPlan, removeMealPlan,
+    addMealPlan, updateMealPlan, removeMealPlan,
     sendMessage,
-    addAppointment, removeAppointment,
+    addAppointment, removeAppointment, bookAppointment,
     addCard, moveCard, removeCard,
     addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
     addCommunityPost, toggleCommunityLike, addCommunityComment, removeCommunityPost,
@@ -934,8 +992,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     db, clientsWithMetrics, hydrated, session, signOut, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
     setCurrentClient, addExercise, updateExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
-    addProgram, updateProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
-    removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
+    addProgram, updateProgram, removeProgram, addMealPlan, updateMealPlan, removeMealPlan, sendMessage, addAppointment,
+    removeAppointment, bookAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
     addCommunityPost, toggleCommunityLike, addCommunityComment, removeCommunityPost,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,

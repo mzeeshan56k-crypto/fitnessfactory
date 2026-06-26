@@ -39,7 +39,9 @@ function scopeForMember(ws: Workspace, user: { email: string; clientId?: string 
     ...ws,
     clients: mine ? [mine] : [],
     conversations: (ws.conversations ?? []).filter((c) => c.clientId === myId),
-    appointments: (ws.appointments ?? []).filter((a) => a.clientId === myId),
+    // The member's own appointments plus any open slots (clientId === "") the
+    // coach has published for booking.
+    appointments: (ws.appointments ?? []).filter((a) => a.clientId === myId || !a.clientId),
     checkins: (ws.checkins ?? []).filter((c) => c.clientId === myId),
     users: [],
     broadcasts: [],

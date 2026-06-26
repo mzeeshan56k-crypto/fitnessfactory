@@ -88,7 +88,7 @@ export default function DashboardChallengesPage() {
                 <p className="text-sm text-ink-600">{c.desc}</p>
                 <div className="mt-3 flex items-center gap-4 text-xs text-ink-500">
                   <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {c.daysLeft} days left</span>
-                  <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {c.participants.toLocaleString()} joined</span>
+                  <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {(c.joinedBy?.length ?? c.participants).toLocaleString()} joined</span>
                 </div>
                 {/* Client daily marks */}
                 {c.dailyMarks && Object.keys(c.dailyMarks).length > 0 && (

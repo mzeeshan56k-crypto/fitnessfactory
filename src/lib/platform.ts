@@ -190,8 +190,10 @@ export interface Challenge {
   metric: string;
   daysLeft: number;
   participants: number;
-  joined: boolean;
+  joined: boolean; // legacy global flag (kept for back-compat)
   color: string;
+  // Client ids who have joined this challenge (per-client membership).
+  joinedBy?: string[];
   // Daily marks: Record<clientId, string[]> where each string is an ISO date (YYYY-MM-DD).
   dailyMarks?: Record<string, string[]>;
 }

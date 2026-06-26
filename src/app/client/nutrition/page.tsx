@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useLocalState } from "@/lib/useLocalState";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { EmptyState, Modal, Field } from "@/components/ui/Modal";
+import { MediaGallery } from "@/components/MediaGallery";
 
 type Goal = "cut" | "maintain" | "bulk";
 type Pref = "Balanced" | "High-protein" | "Vegetarian" | "Keto";
@@ -438,6 +439,14 @@ export default function ClientNutritionPage() {
               </span>
             </div>
           </section>
+
+          {/* Recipe pictures & PDFs from the coach */}
+          {plan.media && plan.media.length > 0 && (
+            <section className="card p-5">
+              <h2 className="mb-4 font-semibold text-ink-900">Recipes & attachments</h2>
+              <MediaGallery media={plan.media} />
+            </section>
+          )}
         </>
       ) : (
         /* No assigned plan — keep the logging tools below working */

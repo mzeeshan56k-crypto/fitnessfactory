@@ -57,9 +57,10 @@ export interface WorkoutExercise {
 // uploaded (stored URL); videos are links (YouTube, Vimeo, Loom, mp4, etc.).
 export interface TrainingMedia {
   id: string;
-  type: "image" | "video";
+  type: "image" | "video" | "pdf";
   url: string;
   caption?: string;
+  name?: string; // original file name (handy for PDFs)
 }
 
 export interface Workout {
@@ -95,6 +96,7 @@ export interface MealPlan {
   fat: number;
   meals: { name: string; items: string[]; kcal: number }[];
   tag: string;
+  media?: TrainingMedia[]; // recipe pictures / PDFs shown to the client
 }
 
 export interface Message {
@@ -113,8 +115,9 @@ export interface Conversation {
 export interface Appointment {
   id: string;
   title: string;
-  clientId: string;
-  day: number; // 0=Mon
+  clientId: string; // "" = an open slot any client can book
+  day: number; // 0=Mon (legacy / fallback when no date)
+  date?: string; // ISO yyyy-mm-dd — the real calendar day
   start: string;
   end: string;
   type: "session" | "check-in" | "consult" | "class";
@@ -205,6 +208,7 @@ export interface NutritionLog {
   water: number;
   foodLog: FoodEntry[];
   logged: string[]; // names of assigned plan meals checked off
+  updatedAt?: number; // last time the member logged (drives coach notifications)
 }
 
 // A logged bodyweight entry (member logs these; coach sees the trend).

@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, ExternalLink } from "lucide-react";
+import { Play, ExternalLink, FileText } from "lucide-react";
 import type { TrainingMedia } from "@/lib/data";
 
 /** Turns common video links into an embeddable URL; returns null if we can't. */
@@ -44,6 +44,26 @@ export function MediaGallery({ media }: { media?: TrainingMedia[] }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={m.url} alt={m.caption || "Training image"} className="w-full object-cover" />
             </div>
+          );
+        }
+        if (m.type === "pdf") {
+          return (
+            <a
+              key={m.id}
+              href={m.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-2xl border border-ink-200 bg-ink-50/60 p-4 transition hover:border-brand-300"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/15 text-rose-500">
+                <FileText className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-ink-900">{m.name || "View PDF"}</span>
+                <span className="block text-xs text-ink-400">Tap to open</span>
+              </span>
+              <ExternalLink className="h-4 w-4 shrink-0 text-ink-400" />
+            </a>
           );
         }
         const embed = toEmbed(m.url);

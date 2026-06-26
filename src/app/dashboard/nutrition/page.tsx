@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import {
-  Plus, Flame, Drumstick, Wheat, Droplet, Utensils, Trash2, Loader2, X,
+  Plus, Flame, Drumstick, Wheat, Droplet, Utensils, Trash2, Loader2, X, Pencil,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
-import type { MealPlan } from "@/lib/data";
+import { MediaEditor } from "@/components/MediaEditor";
+import { MediaGallery } from "@/components/MediaGallery";
+import type { MealPlan, TrainingMedia } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +35,7 @@ export default function NutritionPage() {
   const app = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Plan form
   const [name, setName] = useState("");
@@ -42,6 +45,7 @@ export default function NutritionPage() {
   const [fat, setFat] = useState("60");
   const [tag, setTag] = useState("Custom");
   const [mealRows, setMealRows] = useState<MealRow[]>([emptyMealRow()]);
+  const [media, setMedia] = useState<TrainingMedia[]>([]);
 
   if (!app.hydrated) {
     return (
@@ -70,6 +74,30 @@ export default function NutritionPage() {
     setFat("60");
     setTag("Custom");
     setMealRows([emptyMealRow()]);
+    setMedia([]);
+    setEditingId(null);
+  }
+
+  function openCreate() {
+    resetForm();
+    setOpen(true);
+  }
+
+  function openEdit(m: MealPlan) {
+    setEditingId(m.id);
+    setName(m.name);
+    setCalories(String(m.calories));
+    setProtein(String(m.protein));
+    setCarbs(String(m.carbs));
+    setFat(String(m.fat));
+    setTag(m.tag);
+    setMealRows(
+      m.meals.length
+        ? m.meals.map((meal) => ({ name: meal.name, kcal: String(meal.kcal), items: meal.items.join(", ") }))
+        : [emptyMealRow()],
+    );
+    setMedia(m.media ?? []);
+    setOpen(true);
   }
 
   function submitPlan() {
@@ -84,7 +112,7 @@ export default function NutritionPage() {
           .map((i) => i.trim())
           .filter(Boolean),
       }));
-    const plan = app.addMealPlan({
+    const payload = {
       name: name.trim(),
       calories: Number(calories) || 0,
       protein: Number(protein) || 0,
@@ -92,8 +120,15 @@ export default function NutritionPage() {
       fat: Number(fat) || 0,
       tag: tag.trim() || "Custom",
       meals,
-    });
-    setSelectedId(plan.id);
+      media: media.length ? media : undefined,
+    };
+    if (editingId) {
+      app.updateMealPlan(editingId, payload);
+      setSelectedId(editingId);
+    } else {
+      const plan = app.addMealPlan(payload);
+      setSelectedId(plan.id);
+    }
     resetForm();
     setOpen(false);
   }
@@ -108,7 +143,7 @@ export default function NutritionPage() {
         title="Nutrition"
         subtitle="Build meal plans and track macros"
         action={
-          <button className="btn-primary" onClick={() => setOpen(true)}>
+          <button className="btn-primary" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             New meal plan
           </button>
@@ -130,7 +165,7 @@ export default function NutritionPage() {
             title="No meal plans yet"
             description="Create a meal plan with macro targets and meals to get started."
             action={
-              <button className="btn-primary" onClick={() => setOpen(true)}>
+              <button className="btn-primary" onClick={openCreate}>
                 <Plus className="h-4 w-4" />
                 New meal plan
               </button>
@@ -173,16 +208,25 @@ export default function NutritionPage() {
                       </div>
                     </div>
                   </button>
-                  <button
-                    onClick={() => {
-                      app.removeMealPlan(m.id);
-                      if (selectedId === m.id) setSelectedId(null);
-                    }}
-                    aria-label={`Delete ${m.name}`}
-                    className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-white opacity-0 backdrop-blur transition hover:bg-rose-600 group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="absolute right-3 top-3 flex gap-1.5 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      onClick={() => openEdit(m)}
+                      aria-label={`Edit ${m.name}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur transition hover:bg-brand-600"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        app.removeMealPlan(m.id);
+                        if (selectedId === m.id) setSelectedId(null);
+                      }}
+                      aria-label={`Delete ${m.name}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur transition hover:bg-rose-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -198,7 +242,12 @@ export default function NutritionPage() {
                     <h2 className="font-semibold text-ink-900">{selected.name}</h2>
                     <p className="text-sm text-ink-500">Macro breakdown · {selected.calories.toLocaleString()} kcal/day</p>
                   </div>
-                  <span className="badge bg-brand-500/15 text-brand-400">{selected.tag}</span>
+                  <div className="flex items-center gap-2">
+                    <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => openEdit(selected)}>
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
+                    <span className="badge bg-brand-500/15 text-brand-400">{selected.tag}</span>
+                  </div>
                 </div>
 
                 <div className="mt-5 space-y-4">
@@ -269,24 +318,35 @@ export default function NutritionPage() {
                   )}
                 </div>
               </div>
+
+              {/* Recipe pictures & PDFs */}
+              {selected.media && selected.media.length > 0 && (
+                <div className="card p-6">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Utensils className="h-5 w-5 text-brand-400" />
+                    <h2 className="font-semibold text-ink-900">Recipes & attachments</h2>
+                  </div>
+                  <MediaGallery media={selected.media} />
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* New meal plan modal */}
+      {/* New / edit meal plan modal */}
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
-        title="New meal plan"
+        onClose={() => { setOpen(false); resetForm(); }}
+        title={editingId ? "Edit meal plan" : "New meal plan"}
         size="lg"
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setOpen(false)}>
+            <button className="btn-secondary" onClick={() => { setOpen(false); resetForm(); }}>
               Cancel
             </button>
             <button className="btn-primary" onClick={submitPlan} disabled={!name.trim()}>
-              Create plan
+              {editingId ? "Save changes" : "Create plan"}
             </button>
           </>
         }
@@ -375,6 +435,10 @@ export default function NutritionPage() {
               ))}
             </div>
           </div>
+
+          <Field label="Recipe pictures & PDFs (shown to client)">
+            <MediaEditor media={media} onChange={setMedia} />
+          </Field>
         </div>
       </Modal>
     </>
