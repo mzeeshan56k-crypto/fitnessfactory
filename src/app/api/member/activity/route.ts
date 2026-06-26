@@ -87,15 +87,25 @@ export async function POST(req: NextRequest) {
         )
       : [...conversations, { clientId: mine.id, unread: 1, messages: [msg] }];
   } else if (body.kind === "checkin") {
+    const answers = body.answers ?? {};
     const ci: CheckIn = {
       id: uid("ci"),
       clientId: mine.id,
       date: new Date().toISOString(),
-      answers: body.answers ?? {},
+      answers,
       ...(body.formId ? { formId: String(body.formId) } : {}),
       ...(body.formName ? { formName: String(body.formName) } : {}),
     };
     ws.checkins = [ci, ...(ws.checkins ?? [])];
+    // If the check-in includes a body weight, also log it so the trainer's
+    // weight chart and headline current weight stay in sync.
+    const w = Number(answers.weight);
+    if (Number.isFinite(w) && w > 0) {
+      const entry: WeightEntry = { date: new Date().toISOString(), weight: w };
+      const all = ws.weightLogs ?? {};
+      ws.weightLogs = { ...all, [mine.id]: [entry, ...(all[mine.id] ?? [])].slice(0, 365) };
+      ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, currentWeight: w, lastActive: "Just now" } : c));
+    }
   } else if (body.kind === "workout") {
     const c = body.completion ?? {};
     const completion: Completion = {

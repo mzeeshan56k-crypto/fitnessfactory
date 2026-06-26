@@ -560,7 +560,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: uid("ci"), clientId, date: new Date().toISOString(), answers,
       formId: meta?.formId, formName: meta?.formName,
     };
-    setDb((d) => ({ ...d, checkins: [ci, ...d.checkins] }));
+    // A weight answer also feeds the body-weight log so the trainer's chart
+    // and headline current weight update the moment a check-in is submitted.
+    const w = Number(answers.weight);
+    const logsWeight = Number.isFinite(w) && w > 0;
+    setDb((d) => ({
+      ...d,
+      checkins: [ci, ...d.checkins],
+      ...(logsWeight
+        ? {
+            weightLogs: {
+              ...d.weightLogs,
+              [clientId]: [{ date: new Date().toISOString(), weight: w }, ...(d.weightLogs[clientId] ?? [])],
+            },
+            clients: d.clients.map((c) => (c.id === clientId ? { ...c, currentWeight: w, lastActive: "Just now" } : c)),
+          }
+        : {}),
+    }));
     if (sessionRef.current?.role === "member") {
       fetch("/api/member/activity", {
         method: "POST",
