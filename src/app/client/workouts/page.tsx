@@ -7,6 +7,7 @@ import {
 import { useApp, useCurrentClient } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/Modal";
+import { MediaGallery } from "@/components/MediaGallery";
 
 const difficultyTint: Record<string, string> = {
   Beginner: "bg-accent-500/15 text-accent-400",
@@ -64,6 +65,17 @@ export default function ClientWorkoutsPage() {
           ) : null;
         })()}
       </section>
+
+      {/* Program media from the coach */}
+      {(() => {
+        const prog = app.programs.find((p) => p.name === c.program);
+        return prog?.media && prog.media.length > 0 ? (
+          <section className="space-y-3">
+            <h2 className="px-1 font-semibold text-ink-900">From your coach</h2>
+            <MediaGallery media={prog.media} />
+          </section>
+        ) : null;
+      })()}
 
       {/* Workout list */}
       {workouts.length === 0 ? (

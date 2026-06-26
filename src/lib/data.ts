@@ -53,6 +53,15 @@ export interface WorkoutExercise {
   notes?: string;
 }
 
+// An image or video the trainer attaches to a workout / program. Images are
+// uploaded (stored URL); videos are links (YouTube, Vimeo, Loom, mp4, etc.).
+export interface TrainingMedia {
+  id: string;
+  type: "image" | "video";
+  url: string;
+  caption?: string;
+}
+
 export interface Workout {
   id: string;
   name: string;
@@ -61,6 +70,7 @@ export interface Workout {
   difficulty: "Beginner" | "Intermediate" | "Advanced";
   exercises: WorkoutExercise[];
   instructions?: string; // trainer instructions shown to the client
+  media?: TrainingMedia[]; // pictures / videos shown to the client
 }
 
 export interface Program {
@@ -73,6 +83,7 @@ export interface Program {
   color: string;
   workoutIds?: string[]; // the workouts this program delivers
   instructions?: string; // trainer notes about this phase shown to the client
+  media?: TrainingMedia[]; // pictures / videos shown to the client
 }
 
 export interface MealPlan {
@@ -107,6 +118,29 @@ export interface Appointment {
   start: string;
   end: string;
   type: "session" | "check-in" | "consult" | "class";
+  requestedByClient?: boolean; // set when the member booked it themselves
+}
+
+// A community feed comment.
+export interface CommunityComment {
+  id: string;
+  author: string;
+  avatar: string;
+  coach: boolean;
+  text: string;
+  ts: number;
+}
+
+// A shared community feed post (coach + all members see the same feed).
+export interface CommunityPost {
+  id: string;
+  author: string;
+  avatar: string;
+  coach: boolean;
+  text: string;
+  ts: number;
+  likedBy: string[]; // ids/emails of people who liked it
+  comments: CommunityComment[];
 }
 
 export interface Habit {

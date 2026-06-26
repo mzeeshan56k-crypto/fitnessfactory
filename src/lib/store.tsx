@@ -6,7 +6,7 @@ import {
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
   Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto, NutritionLog,
-  WeightEntry,
+  WeightEntry, CommunityPost, CommunityComment,
 } from "@/lib/data";
 import type {
   KanbanColumn, KanbanCard, Challenge, PlatformUser, AISuggestion,
@@ -96,6 +96,8 @@ export interface DB {
   nutritionLogs: Record<string, NutritionLog>;
   // Bodyweight history, keyed by client id.
   weightLogs: Record<string, WeightEntry[]>;
+  // Shared community feed (coach + all members see the same posts).
+  communityPosts: CommunityPost[];
   settings: AppSettings;
   currentClientId: string | null;
   seeded: boolean;
@@ -113,7 +115,7 @@ const emptyDB: DB = {
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
   formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
-  nutritionLogs: {}, weightLogs: {},
+  nutritionLogs: {}, weightLogs: {}, communityPosts: [],
   settings: {
     trainerName: "Your Name",
     trainerEmail: "you@email.com",
@@ -171,6 +173,11 @@ interface AppContextValue extends DB {
   toggleJoinChallenge: (id: string) => void;
   removeChallenge: (id: string) => void;
   markChallengeDay: (challengeId: string, clientId: string, date: string, remove?: boolean) => void;
+  // community feed (shared)
+  addCommunityPost: (text: string) => void;
+  toggleCommunityLike: (postId: string) => void;
+  addCommunityComment: (postId: string, text: string) => void;
+  removeCommunityPost: (postId: string) => void;
   // ai
   resolveSuggestion: (id: string, status: "approved" | "dismissed" | "pending") => void;
   // checkins
@@ -499,16 +506,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   /* ----- appointments ----- */
   const addAppointment = useCallback((a: Partial<Appointment>): Appointment => {
+    const isMember = sessionRef.current?.role === "member";
     const appt: Appointment = {
       id: uid("a"), title: a.title ?? "New Event", clientId: a.clientId ?? "",
       day: a.day ?? 0, start: a.start ?? "09:00", end: a.end ?? "10:00",
       type: a.type ?? "session",
+      ...(a.requestedByClient || isMember ? { requestedByClient: true } : {}),
     };
     setDb((d) => ({ ...d, appointments: [...d.appointments, appt] }));
+    // A member booking with their coach is persisted server-side safely so it
+    // shows on the trainer's calendar too.
+    if (isMember) {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "appointment", appointment: appt }),
+      }).catch(() => {});
+    }
     return appt;
   }, []);
-  const removeAppointment = useCallback((id: string) =>
-    setDb((d) => ({ ...d, appointments: d.appointments.filter((a) => a.id !== id) })), []);
+  const removeAppointment = useCallback((id: string) => {
+    setDb((d) => ({ ...d, appointments: d.appointments.filter((a) => a.id !== id) }));
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "appointment-remove", appointmentId: id }),
+      }).catch(() => {});
+    }
+  }, []);
 
   /* ----- kanban ----- */
   const addCard = useCallback((columnId: string, title: string, clientId?: string) => {
@@ -571,6 +597,88 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return { ...c, dailyMarks: { ...(c.dailyMarks ?? {}), [clientId]: next } };
       }),
     })), []);
+
+  /* ----- community feed (shared coach ↔ members) ----- */
+  // Identify who is posting/liking right now (member → their client record,
+  // staff → the coach identity from settings).
+  const currentAuthor = useCallback(() => {
+    const d = dbRef.current;
+    const sess = sessionRef.current;
+    const initials = (name: string) =>
+      name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase() || "ME";
+    if (sess?.role === "member") {
+      const c =
+        d.clients.find((x) => x.id === sess.clientId) ??
+        d.clients.find((x) => x.email.toLowerCase() === sess.email.toLowerCase());
+      const name = c?.name ?? sess.name ?? "Member";
+      return { author: name, avatar: c?.avatar ?? initials(name), coach: false, id: c?.id ?? sess.email };
+    }
+    const name = d.settings.trainerName || sess?.name || "Coach";
+    return { author: name, avatar: initials(name), coach: true, id: sess?.email ?? "coach" };
+  }, []);
+
+  const syncCommunity = useCallback((posts: CommunityPost[]) => {
+    // Members can't PUT the workspace, so persist the feed via the safe endpoint.
+    if (sessionRef.current?.role === "member") {
+      fetch("/api/member/activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "community", communityPosts: posts }),
+      }).catch(() => {});
+    }
+  }, []);
+
+  const addCommunityPost = useCallback((text: string) => {
+    const body = text.trim();
+    if (!body) return;
+    const a = currentAuthor();
+    const post: CommunityPost = {
+      id: uid("post"), author: a.author, avatar: a.avatar, coach: a.coach,
+      text: body, ts: Date.now(), likedBy: [], comments: [],
+    };
+    setDb((d) => {
+      const posts = [post, ...d.communityPosts];
+      syncCommunity(posts);
+      return { ...d, communityPosts: posts };
+    });
+  }, [currentAuthor, syncCommunity]);
+
+  const toggleCommunityLike = useCallback((postId: string) => {
+    const a = currentAuthor();
+    setDb((d) => {
+      const posts = d.communityPosts.map((p) => {
+        if (p.id !== postId) return p;
+        const liked = p.likedBy.includes(a.id);
+        return { ...p, likedBy: liked ? p.likedBy.filter((x) => x !== a.id) : [...p.likedBy, a.id] };
+      });
+      syncCommunity(posts);
+      return { ...d, communityPosts: posts };
+    });
+  }, [currentAuthor, syncCommunity]);
+
+  const addCommunityComment = useCallback((postId: string, text: string) => {
+    const body = text.trim();
+    if (!body) return;
+    const a = currentAuthor();
+    const comment: CommunityComment = {
+      id: uid("cm"), author: a.author, avatar: a.avatar, coach: a.coach, text: body, ts: Date.now(),
+    };
+    setDb((d) => {
+      const posts = d.communityPosts.map((p) =>
+        p.id === postId ? { ...p, comments: [...p.comments, comment] } : p,
+      );
+      syncCommunity(posts);
+      return { ...d, communityPosts: posts };
+    });
+  }, [currentAuthor, syncCommunity]);
+
+  const removeCommunityPost = useCallback((postId: string) => {
+    setDb((d) => {
+      const posts = d.communityPosts.filter((p) => p.id !== postId);
+      syncCommunity(posts);
+      return { ...d, communityPosts: posts };
+    });
+  }, [syncCommunity]);
 
   /* ----- ai ----- */
   const resolveSuggestion = useCallback((id: string, status: "approved" | "dismissed" | "pending") =>
@@ -813,6 +921,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addAppointment, removeAppointment,
     addCard, moveCard, removeCard,
     addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
+    addCommunityPost, toggleCommunityLike, addCommunityComment, removeCommunityPost,
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
@@ -827,6 +936,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCurrentClient, addExercise, updateExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
     addProgram, updateProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge, removeChallenge, markChallengeDay,
+    addCommunityPost, toggleCommunityLike, addCommunityComment, removeCommunityPost,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,

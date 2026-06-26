@@ -99,6 +99,11 @@ export default function CalendarPage() {
             <Clock className="h-3 w-3" />
             {appt.start}–{appt.end}
           </div>
+          {appt.requestedByClient && (
+            <span className="mt-0.5 inline-block rounded bg-brand-600/20 px-1 text-[9px] font-semibold uppercase tracking-wide text-brand-700">
+              Client request
+            </span>
+          )}
         </div>
         {client && <Avatar initials={client.avatar} size="sm" className="ring-1" />}
         <button

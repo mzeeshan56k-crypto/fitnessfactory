@@ -57,6 +57,7 @@ const nav: NavEntry[] = [
     items: [
       { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },
       { href: "/dashboard/announcements", label: "Announcements", icon: Megaphone },
+      { href: "/dashboard/community", label: "Community", icon: UsersRound },
     ],
   },
   { href: "/dashboard/team", label: "Team", icon: UsersRound },

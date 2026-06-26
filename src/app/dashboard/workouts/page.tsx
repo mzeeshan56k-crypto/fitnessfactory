@@ -9,7 +9,8 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
 import { ExerciseAnimation } from "@/components/ui/ExerciseAnimation";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
-import type { Workout, WorkoutExercise, Exercise, Program } from "@/lib/data";
+import { MediaEditor } from "@/components/MediaEditor";
+import type { Workout, WorkoutExercise, Exercise, Program, TrainingMedia } from "@/lib/data";
 import { sampleVideo } from "@/lib/media";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,7 @@ export default function TrainingPage() {
   const [wDuration, setWDuration] = useState("45");
   const [wDifficulty, setWDifficulty] = useState<(typeof difficulties)[number]>("Beginner");
   const [wInstructions, setWInstructions] = useState("");
+  const [wMedia, setWMedia] = useState<TrainingMedia[]>([]);
 
   // Program form
   const [pName, setPName] = useState("");
@@ -78,6 +80,7 @@ export default function TrainingPage() {
   const [pFocus, setPFocus] = useState("General");
   const [pColor, setPColor] = useState(colorPresets[0].value);
   const [pInstructions, setPInstructions] = useState("");
+  const [pMedia, setPMedia] = useState<TrainingMedia[]>([]);
 
   // Exercise form
   const [eName, setEName] = useState("");
@@ -125,6 +128,7 @@ export default function TrainingPage() {
         durationMin: Number(wDuration) || 45,
         difficulty: wDifficulty,
         instructions: wInstructions.trim() || undefined,
+        media: wMedia.length ? wMedia : undefined,
       });
     } else {
       const w = app.addWorkout({
@@ -134,6 +138,7 @@ export default function TrainingPage() {
         difficulty: wDifficulty,
         exercises: [],
         instructions: wInstructions.trim() || undefined,
+        media: wMedia.length ? wMedia : undefined,
       });
       setSelectedId(w.id);
     }
@@ -142,6 +147,7 @@ export default function TrainingPage() {
     setWDuration("45");
     setWDifficulty("Beginner");
     setWInstructions("");
+    setWMedia([]);
     setEditingWorkoutId(null);
     setWorkoutModal(false);
   }
@@ -153,6 +159,7 @@ export default function TrainingPage() {
     setWDuration("45");
     setWDifficulty("Beginner");
     setWInstructions("");
+    setWMedia([]);
     setWorkoutModal(true);
   }
 
@@ -163,6 +170,7 @@ export default function TrainingPage() {
     setWDuration(String(w.durationMin));
     setWDifficulty(w.difficulty);
     setWInstructions(w.instructions ?? "");
+    setWMedia(w.media ?? []);
     setWorkoutModal(true);
   }
 
@@ -176,6 +184,7 @@ export default function TrainingPage() {
         focus: pFocus.trim() || "General",
         color: pColor,
         instructions: pInstructions.trim() || undefined,
+        media: pMedia.length ? pMedia : undefined,
       });
     } else {
       app.addProgram({
@@ -185,6 +194,7 @@ export default function TrainingPage() {
         focus: pFocus.trim() || "General",
         color: pColor,
         instructions: pInstructions.trim() || undefined,
+        media: pMedia.length ? pMedia : undefined,
       });
     }
     setPName("");
@@ -193,6 +203,7 @@ export default function TrainingPage() {
     setPFocus("General");
     setPColor(colorPresets[0].value);
     setPInstructions("");
+    setPMedia([]);
     setEditingProgramId(null);
     setProgramModal(false);
   }
@@ -205,6 +216,7 @@ export default function TrainingPage() {
     setPFocus("General");
     setPColor(colorPresets[0].value);
     setPInstructions("");
+    setPMedia([]);
     setProgramModal(true);
   }
 
@@ -216,6 +228,7 @@ export default function TrainingPage() {
     setPFocus(p.focus);
     setPColor(p.color);
     setPInstructions(p.instructions ?? "");
+    setPMedia(p.media ?? []);
     setProgramModal(true);
   }
 
@@ -865,6 +878,9 @@ export default function TrainingPage() {
               placeholder="Say something about this workout — goals, tips, what to focus on…"
             />
           </Field>
+          <Field label="Pictures & videos (shown to client)">
+            <MediaEditor media={wMedia} onChange={setWMedia} />
+          </Field>
         </div>
       </Modal>
 
@@ -945,6 +961,9 @@ export default function TrainingPage() {
               onChange={(e) => setPInstructions(e.target.value)}
               placeholder="Say something about this training phase — goals, focus, mindset…"
             />
+          </Field>
+          <Field label="Pictures & videos (shown to client)">
+            <MediaEditor media={pMedia} onChange={setPMedia} />
           </Field>
         </div>
       </Modal>

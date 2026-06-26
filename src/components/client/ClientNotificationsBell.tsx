@@ -29,20 +29,22 @@ export function ClientNotificationsBell() {
     return () => window.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  if (!client) return null;
-
-  const plan = app.clientPlans[client.id] ?? { workoutIds: [] };
+  // Render the bell even before a client record resolves so it's always visible;
+  // the notification list just stays empty until data loads.
+  const plan = client ? app.clientPlans[client.id] ?? { workoutIds: [] } : { workoutIds: [] as string[] };
   const assignedForms = (plan.formIds ?? [])
     .map((id) => app.forms.find((f) => f.id === id))
     .filter((f): f is NonNullable<typeof f> => Boolean(f));
-  const formsToDo = assignedForms.filter(
-    (f) => !app.checkins.some((ci) => ci.clientId === client.id && ci.formId === f.id),
-  );
+  const formsToDo = client
+    ? assignedForms.filter(
+        (f) => !app.checkins.some((ci) => ci.clientId === client.id && ci.formId === f.id),
+      )
+    : [];
   const assignedWorkoutIds = plan.workoutIds ?? [];
   const mealPlan = app.mealPlans.find((m) => m.id === plan.mealPlanId);
-  const conv = app.conversations.find((c) => c.clientId === client.id);
+  const conv = client ? app.conversations.find((c) => c.clientId === client.id) : undefined;
   const lastCoach = conv?.messages.filter((m) => !m.fromClient).slice(-1)[0];
-  const nextAppt = app.appointments.find((a) => a.clientId === client.id);
+  const nextAppt = client ? app.appointments.find((a) => a.clientId === client.id) : undefined;
 
   const items: Item[] = [];
   // Each assigned workout is its own notification so newly-assigned ones show up.

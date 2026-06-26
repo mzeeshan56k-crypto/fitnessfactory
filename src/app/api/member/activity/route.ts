@@ -17,6 +17,14 @@ interface Photo { id: string; label: string; date: string; url: string }
 interface FoodEntry { id: string; name: string; kcal: number }
 interface NutritionLog { water: number; foodLog: FoodEntry[]; logged: string[] }
 interface WeightEntry { date: string; weight: number }
+interface Appointment {
+  id: string; title: string; clientId: string; day: number;
+  start: string; end: string; type: string; requestedByClient?: boolean;
+}
+interface CommunityPost {
+  id: string; author: string; avatar: string; coach: boolean;
+  text: string; ts: number; likedBy: string[]; comments: unknown[];
+}
 interface WsClient {
   id: string; email: string;
   currentWeight?: number; startWeight?: number; goalWeight?: number;
@@ -31,6 +39,8 @@ interface Workspace {
   nutritionLogs?: Record<string, NutritionLog>;
   weightLogs?: Record<string, WeightEntry[]>;
   clientPlans?: Record<string, { workoutIds?: string[] }>;
+  appointments?: Appointment[];
+  communityPosts?: CommunityPost[];
   [k: string]: unknown;
 }
 
@@ -45,7 +55,9 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    kind?: "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight";
+    kind?:
+      | "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight"
+      | "appointment" | "appointment-remove" | "community";
     text?: string;
     answers?: Record<string, string | number>;
     formId?: string;
@@ -55,6 +67,9 @@ export async function POST(req: NextRequest) {
     photoId?: string;
     log?: NutritionLog;
     weight?: number;
+    appointment?: Partial<Appointment>;
+    appointmentId?: string;
+    communityPosts?: CommunityPost[];
   };
   try {
     body = await req.json();
@@ -154,6 +169,34 @@ export async function POST(req: NextRequest) {
     ws.weightLogs = { ...all, [mine.id]: [entry, ...(all[mine.id] ?? [])].slice(0, 365) };
     // Headline weight drives derived progress on every portal.
     ws.clients = (ws.clients ?? []).map((c) => (c.id === mine.id ? { ...c, currentWeight: weight, lastActive: "Just now" } : c));
+  } else if (body.kind === "appointment") {
+    const a = body.appointment ?? {};
+    // Members may only create appointments for themselves.
+    const appt: Appointment = {
+      id: String(a.id || uid("a")),
+      title: String(a.title || "Session"),
+      clientId: mine.id,
+      day: Number(a.day ?? 0),
+      start: String(a.start || "09:00"),
+      end: String(a.end || "10:00"),
+      type: String(a.type || "session"),
+      requestedByClient: true,
+    };
+    const existing = ws.appointments ?? [];
+    ws.appointments = existing.some((x) => x.id === appt.id)
+      ? existing.map((x) => (x.id === appt.id ? appt : x))
+      : [...existing, appt];
+  } else if (body.kind === "appointment-remove") {
+    // Members may only remove their own appointments.
+    ws.appointments = (ws.appointments ?? []).filter(
+      (x) => !(x.id === body.appointmentId && x.clientId === mine.id),
+    );
+  } else if (body.kind === "community") {
+    // The whole feed is shared; trust the client's merged copy but cap size.
+    if (!Array.isArray(body.communityPosts)) {
+      return NextResponse.json({ error: "Missing posts." }, { status: 400 });
+    }
+    ws.communityPosts = body.communityPosts.slice(0, 200);
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

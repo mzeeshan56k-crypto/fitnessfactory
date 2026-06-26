@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 import { useLocalState } from "@/lib/useLocalState";
 import { VideoModal } from "@/components/ui/VideoModal";
+import { MediaGallery } from "@/components/MediaGallery";
 import { sampleVideo } from "@/lib/media";
 
 interface SetLog {
@@ -204,6 +205,14 @@ function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Wo
           </div>
         </div>
       </section>
+
+      {/* Trainer media */}
+      {w.media && w.media.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="px-1 font-semibold text-ink-900">From your coach</h2>
+          <MediaGallery media={w.media} />
+        </section>
+      )}
 
       {/* Exercises */}
       <section className="space-y-4 pb-4">
