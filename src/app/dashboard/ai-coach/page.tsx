@@ -1,14 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import {
   Sparkles, Send, Check, X, Pencil, ShieldCheck,
-  Dumbbell, ClipboardCheck, LineChart, AlertTriangle,
+  Dumbbell, ClipboardCheck, LineChart, AlertTriangle, Loader2, AlertCircle, Settings,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import type { AISuggestion } from "@/lib/platform";
 import { useApp } from "@/lib/store";
+import { askAI, aiConfigured, type AIChatMessage } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 
 /* --------------------------- Suggestion config -------------------------- */
@@ -35,75 +37,6 @@ const quickActions = [
   { id: "atrisk", icon: AlertTriangle, label: "Find at-risk clients", prompt: "Find at-risk clients and tell me who needs attention." },
 ];
 
-function generateReply(input: string): string {
-  const text = input.toLowerCase();
-
-  if (text.includes("optimize") || text.includes("program") || text.includes("split") || text.includes("periodiz")) {
-    return [
-      "Here's a 4-week periodized block you can assign right away:",
-      "",
-      "Week 1 — Accumulation (volume): 4×8 @ RPE 7",
-      "Week 2 — Accumulation+ : 4×8 @ RPE 8, +2.5–5 lb",
-      "Week 3 — Intensification : 5×5 @ RPE 8–9",
-      "Week 4 — Deload : 3×5 @ RPE 6, −40% volume",
-      "",
-      "Anchor lifts: Back Squat, Bench Press, Deadlift. Add 2 accessory slots per session for weak points. Want me to map this to a specific client's current numbers?",
-    ].join("\n");
-  }
-
-  if (text.includes("at risk") || text.includes("at-risk") || text.includes("drop") || text.includes("attention")) {
-    return [
-      "Scanning your traffic-light board, two clients are flagged red:",
-      "",
-      "• Liam Patel — 12% workout, 0% diet logging. Never completed onboarding. Action: welcome call + intake today.",
-      "• Noah Kim — inactive 3 weeks, habit streak broken. Action: re-engagement call to reset the plan.",
-      "",
-      "Two more are on the watch list (Sofia, Ava) with slipping nutrition. Want me to draft outreach messages for the red flags?",
-    ].join("\n");
-  }
-
-  if (text.includes("trend") || text.includes("analyz") || text.includes("progress") || text.includes("summar")) {
-    return [
-      "Roster-wide trends this month:",
-      "",
-      "• Workout compliance: 88% (steady, strongest signal)",
-      "• Diet logging: 81% (dips on weekends — worth a template)",
-      "• Habits: 76% (sleep streaks are the soft spot)",
-      "",
-      "Top performer: Emma Wilson (95%+ across the board — request a testimonial). Biggest drag: weekend nutrition adherence. Want a deeper dive on any single metric?",
-    ].join("\n");
-  }
-
-  if (text.includes("check-in") || text.includes("checkin") || text.includes("message") || text.includes("draft")) {
-    return [
-      "Here's a warm weekly check-in you can send:",
-      "",
-      "\"Hey! Incredible week — you hit every session and your consistency is really showing. How are recovery and energy feeling? If you're up for it we can nudge the working weights slightly next week. Proud of you 💪\"",
-      "",
-      "Want a gentler version for a client who missed a few sessions?",
-    ].join("\n");
-  }
-
-  if (text.includes("meal") || text.includes("nutrition") || text.includes("diet")) {
-    return [
-      "Here's a high-protein day at ~1,900 kcal (180g protein):",
-      "",
-      "• Breakfast — Egg white omelette, oats & berries (430 kcal)",
-      "• Lunch — Grilled chicken, quinoa, greens (560 kcal)",
-      "• Snack — Greek yogurt + almonds (280 kcal)",
-      "• Dinner — Baked salmon, sweet potato, broccoli (580 kcal)",
-      "",
-      "High protein preserves muscle in a deficit. I can swap meals for any dietary restrictions.",
-    ].join("\n");
-  }
-
-  return [
-    "I'm your AI co-pilot — I can analyze roster trends, optimize programs, draft client messages, and surface at-risk clients.",
-    "",
-    "Tell me a client, goal, or metric and I'll give you something you can action right away.",
-  ].join("\n");
-}
-
 let idCounter = 0;
 function nextId() {
   idCounter += 1;
@@ -116,6 +49,7 @@ export default function AiCoachPage() {
   const app = useApp();
   const suggestions = app.aiSuggestions;
   const pendingCount = suggestions.filter((s) => s.status === "pending").length;
+  const configured = aiConfigured(app.settings);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -125,15 +59,45 @@ export default function AiCoachPage() {
     },
   ]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function send(raw?: string) {
+  async function send(raw?: string) {
     const value = (raw ?? input).trim();
-    if (!value) return;
+    if (!value || loading) return;
+    setError(null);
     const userMsg: ChatMessage = { id: nextId(), role: "user", text: value };
-    const assistantMsg: ChatMessage = { id: nextId(), role: "assistant", text: generateReply(value) };
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    const history = [...messages, userMsg];
+    setMessages(history);
     setInput("");
+
+    // The co-pilot only answers when a real AI provider key is connected.
+    if (!configured) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: "assistant",
+          text:
+            "AI isn't connected yet. Open **Settings → AI Copilot**, pick a provider " +
+            "(OpenAI, Claude, Gemini or Grok) and paste your API key — then I'll generate " +
+            "programs, meal plans and coaching replies live.",
+        },
+      ]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const convo: AIChatMessage[] = history.map((m) => ({ role: m.role, content: m.text }));
+      const reply = await askAI(app.settings, convo);
+      setMessages((prev) => [...prev, { id: nextId(), role: "assistant", text: reply }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI request failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -276,6 +240,16 @@ export default function AiCoachPage() {
         <h2 className="font-semibold text-ink-900">Ask your co-pilot</h2>
       </div>
 
+      {!configured && (
+        <Link
+          href="/dashboard/settings?tab=ai"
+          className="mb-3 flex items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-400 transition hover:bg-brand-500/20"
+        >
+          <Settings className="h-4 w-4 shrink-0" />
+          Connect an AI provider key (OpenAI, Claude, Gemini or Grok) in Settings to enable live answers.
+        </Link>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {quickActions.map((a) => (
           <button
@@ -299,7 +273,9 @@ export default function AiCoachPage() {
           </span>
           <div>
             <div className="text-sm font-semibold text-ink-900">AI Co-Pilot</div>
-            <div className="text-xs text-accent-400">Online · ready to help</div>
+            <div className={cn("text-xs", configured ? "text-accent-400" : "text-ink-400")}>
+              {configured ? `${app.settings.aiProvider} · ${app.settings.aiModel || "default model"}` : "Not connected"}
+            </div>
           </div>
         </div>
 
@@ -326,6 +302,16 @@ export default function AiCoachPage() {
               </div>
             </div>
           ))}
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-ink-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Thinking…
+            </div>
+          )}
+          {error && (
+            <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-400">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+            </div>
+          )}
         </div>
 
         <form
@@ -339,11 +325,11 @@ export default function AiCoachPage() {
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask the AI co-pilot anything…"
+            placeholder={configured ? "Ask the AI co-pilot anything…" : "Connect an AI key in Settings to chat live…"}
             className="input flex-1"
           />
-          <button type="submit" className="btn-primary" disabled={!input.trim()}>
-            <Send className="h-4 w-4" /> Send
+          <button type="submit" className="btn-primary" disabled={!input.trim() || loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send
           </button>
         </form>
       </div>

@@ -88,7 +88,7 @@ export default function SettingsPage() {
   const [timezone, setTimezone] = useState("America/Los_Angeles");
 
   // AI Copilot config
-  const [aiProvider, setAiProvider] = useState<"openai" | "anthropic" | "gemini">("openai");
+  const [aiProvider, setAiProvider] = useState<"openai" | "anthropic" | "gemini" | "grok">("openai");
   const [aiModel, setAiModel] = useState("");
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiSaved, setAiSaved] = useState(false);
@@ -313,8 +313,8 @@ export default function SettingsPage() {
               <div className="mt-6 space-y-5">
                 <div>
                   <span className="label">Provider</span>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {(Object.keys(AI_MODELS) as Array<"openai" | "anthropic" | "gemini">).map((p) => (
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    {(Object.keys(AI_MODELS) as Array<"openai" | "anthropic" | "gemini" | "grok">).map((p) => (
                       <button
                         key={p}
                         type="button"
@@ -352,7 +352,10 @@ export default function SettingsPage() {
                       value={aiApiKey}
                       onChange={(e) => setAiApiKey(e.target.value)}
                       placeholder={
-                        aiProvider === "openai" ? "sk-…" : aiProvider === "anthropic" ? "sk-ant-…" : "AIza…"
+                        aiProvider === "openai" ? "sk-…"
+                          : aiProvider === "anthropic" ? "sk-ant-…"
+                          : aiProvider === "grok" ? "xai-…"
+                          : "AIza…"
                       }
                       autoComplete="off"
                     />
@@ -361,6 +364,7 @@ export default function SettingsPage() {
                     {aiProvider === "openai" && "Get one at platform.openai.com → API keys."}
                     {aiProvider === "anthropic" && "Get one at console.anthropic.com → API keys."}
                     {aiProvider === "gemini" && "Get one at aistudio.google.com → API keys."}
+                    {aiProvider === "grok" && "Get one at console.x.ai → API keys."}
                   </p>
                 </label>
 

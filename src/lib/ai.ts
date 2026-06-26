@@ -9,6 +9,7 @@ export const AI_MODELS: Record<string, { label: string; models: string[] }> = {
   openai: { label: "OpenAI (ChatGPT)", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "o4-mini"] },
   anthropic: { label: "Anthropic (Claude)", models: ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"] },
   gemini: { label: "Google (Gemini)", models: ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"] },
+  grok: { label: "xAI (Grok)", models: ["grok-2-latest", "grok-2", "grok-beta"] },
 };
 
 export function aiConfigured(settings: AppSettings | undefined): boolean {

@@ -35,6 +35,7 @@ export interface Exercise {
   type: "Strength" | "Cardio" | "Mobility" | "Core";
   videoThumb: string;
   video?: string;
+  instructions?: string; // written how-to / coaching cues for the movement
   pattern?: string; // movement pattern for the animated graphic
 }
 

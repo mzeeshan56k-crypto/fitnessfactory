@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Plus, Dumbbell, Layers, Library, GripVertical, Clock, Search,
-  Play, Users, Trash2, Loader2, ChevronRight,
+  Play, Users, Trash2, Loader2, ChevronRight, ArrowUp, ArrowDown, X, Copy,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
@@ -81,9 +81,12 @@ export default function TrainingPage() {
   const [eLevel, setELevel] = useState<(typeof levels)[number]>("Beginner");
   const [eType, setEType] = useState<(typeof types)[number]>("Strength");
   const [eVideo, setEVideo] = useState("");
+  const [eInstructions, setEInstructions] = useState("");
 
   // Add-exercise-to-workout control
   const [addExId, setAddExId] = useState("");
+  // Drag-and-drop reorder state (index of the exercise being dragged)
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   const filteredExercises = useMemo(() => {
     return app.exercises.filter((e) => {
@@ -150,6 +153,7 @@ export default function TrainingPage() {
       level: eLevel,
       type: eType,
       video: eVideo.trim() || undefined,
+      instructions: eInstructions.trim() || undefined,
     });
     setEName("");
     setEMuscle("");
@@ -157,6 +161,7 @@ export default function TrainingPage() {
     setELevel("Beginner");
     setEType("Strength");
     setEVideo("");
+    setEInstructions("");
     setExerciseModal(false);
   }
 
@@ -169,11 +174,73 @@ export default function TrainingPage() {
       name: ex.name,
       muscle: ex.muscle,
       sets: [{ reps: "10", weight: "—", rest: "60s" }],
+      // Seed the prescription notes with the library instructions as a starting point.
+      notes: ex.instructions || "",
     };
     app.updateWorkout(selectedWorkout.id, {
       exercises: [...selectedWorkout.exercises, we],
     });
     setAddExId("");
+  }
+
+  /* ----- editable workout builder helpers (operate on selectedWorkout) ----- */
+  function patchExercises(updater: (list: WorkoutExercise[]) => WorkoutExercise[]) {
+    if (!selectedWorkout) return;
+    app.updateWorkout(selectedWorkout.id, { exercises: updater(selectedWorkout.exercises) });
+  }
+  function updateSet(exIdx: number, setIdx: number, patch: Partial<{ reps: string; weight: string; rest: string }>) {
+    patchExercises((list) =>
+      list.map((ex, i) =>
+        i === exIdx ? { ...ex, sets: ex.sets.map((s, si) => (si === setIdx ? { ...s, ...patch } : s)) } : ex,
+      ),
+    );
+  }
+  function addSet(exIdx: number) {
+    patchExercises((list) =>
+      list.map((ex, i) => {
+        if (i !== exIdx) return ex;
+        const last = ex.sets[ex.sets.length - 1] ?? { reps: "10", weight: "—", rest: "60s" };
+        return { ...ex, sets: [...ex.sets, { ...last }] };
+      }),
+    );
+  }
+  function removeSet(exIdx: number, setIdx: number) {
+    patchExercises((list) =>
+      list.map((ex, i) =>
+        i === exIdx ? { ...ex, sets: ex.sets.length > 1 ? ex.sets.filter((_, si) => si !== setIdx) : ex.sets } : ex,
+      ),
+    );
+  }
+  function setExerciseNotes(exIdx: number, notes: string) {
+    patchExercises((list) => list.map((ex, i) => (i === exIdx ? { ...ex, notes } : ex)));
+  }
+  function removeExerciseAt(exIdx: number) {
+    patchExercises((list) => list.filter((_, i) => i !== exIdx));
+  }
+  function moveExercise(from: number, to: number) {
+    if (to < 0) return;
+    patchExercises((list) => {
+      if (to >= list.length) return list;
+      const copy = [...list];
+      const [item] = copy.splice(from, 1);
+      copy.splice(to, 0, item);
+      return copy;
+    });
+  }
+  function handleDrop(toIdx: number) {
+    if (dragIdx === null || dragIdx === toIdx) { setDragIdx(null); return; }
+    moveExercise(dragIdx, toIdx);
+    setDragIdx(null);
+  }
+  function duplicateWorkout(w: Workout) {
+    const copy = app.addWorkout({
+      name: `${w.name} (copy)`,
+      category: w.category,
+      durationMin: w.durationMin,
+      difficulty: w.difficulty,
+      exercises: w.exercises.map((e) => ({ ...e, sets: e.sets.map((s) => ({ ...s })) })),
+    });
+    setSelectedId(copy.id);
   }
 
   return (
@@ -352,56 +419,115 @@ export default function TrainingPage() {
                       <span>{selectedWorkout.exercises.length} exercises</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      app.removeWorkout(selectedWorkout.id);
-                      setSelectedId(null);
-                    }}
-                    className="btn-secondary text-rose-400 hover:bg-rose-500/15"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete workout
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => duplicateWorkout(selectedWorkout)}
+                      className="btn-secondary"
+                      title="Create an editable copy"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Duplicate
+                    </button>
+                    <button
+                      onClick={() => {
+                        app.removeWorkout(selectedWorkout.id);
+                        setSelectedId(null);
+                      }}
+                      className="btn-secondary text-rose-400 hover:bg-rose-500/15"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-4 space-y-4">
-                  {selectedWorkout.exercises.map((ex, i) => (
-                    <div key={`${ex.exerciseId}-${i}`} className="rounded-xl border border-ink-100">
-                      <div className="flex items-center gap-3 border-b border-ink-100 p-3">
-                        <GripVertical className="h-5 w-5 cursor-grab text-ink-300" />
-                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15 text-xs font-bold text-brand-400">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold text-ink-900">{ex.name}</div>
-                          <div className="text-xs text-ink-500">{ex.muscle}</div>
+                  {selectedWorkout.exercises.map((ex, i) => {
+                    const lib = app.exercises.find((e) => e.id === ex.exerciseId);
+                    return (
+                      <div
+                        key={`${ex.exerciseId}-${i}`}
+                        draggable
+                        onDragStart={() => setDragIdx(i)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => handleDrop(i)}
+                        onDragEnd={() => setDragIdx(null)}
+                        className={cn(
+                          "rounded-xl border border-ink-100 bg-ink-50/30 transition",
+                          dragIdx === i && "opacity-60 ring-2 ring-brand-500",
+                        )}
+                      >
+                        <div className="flex items-center gap-3 border-b border-ink-100 p-3">
+                          <span className="cursor-grab text-ink-300" title="Drag to reorder">
+                            <GripVertical className="h-5 w-5" />
+                          </span>
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-xs font-bold text-brand-400">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-ink-900">{ex.name}</div>
+                            <div className="text-xs text-ink-500">{ex.muscle}</div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => moveExercise(i, i - 1)} disabled={i === 0} className="rounded p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700 disabled:opacity-30" aria-label="Move up">
+                              <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => moveExercise(i, i + 1)} disabled={i === selectedWorkout.exercises.length - 1} className="rounded p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700 disabled:opacity-30" aria-label="Move down">
+                              <ArrowDown className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => removeExerciseAt(i)} className="rounded p-1 text-ink-400 transition hover:bg-rose-500/15 hover:text-rose-400" aria-label="Remove exercise">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
-                        <span className="badge bg-ink-100 text-ink-600">{ex.sets.length} sets</span>
+
+                        <div className="space-y-3 p-3">
+                          <div className="overflow-x-auto scroll-thin">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="text-left text-xs uppercase tracking-wide text-ink-400">
+                                  <th className="pb-2 pl-1 font-medium">Set</th>
+                                  <th className="pb-2 pr-2 font-medium">Reps</th>
+                                  <th className="pb-2 pr-2 font-medium">Weight</th>
+                                  <th className="pb-2 pr-2 font-medium">Rest</th>
+                                  <th className="pb-2" />
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ex.sets.map((s, si) => (
+                                  <tr key={si} className="border-t border-ink-100">
+                                    <td className="py-1.5 pl-1 font-semibold text-ink-700">{si + 1}</td>
+                                    <td className="py-1.5 pr-2"><input className="input h-9 py-1" value={s.reps} onChange={(e) => updateSet(i, si, { reps: e.target.value })} placeholder="10" /></td>
+                                    <td className="py-1.5 pr-2"><input className="input h-9 py-1" value={s.weight} onChange={(e) => updateSet(i, si, { weight: e.target.value })} placeholder="—" /></td>
+                                    <td className="py-1.5 pr-2"><input className="input h-9 py-1" value={s.rest} onChange={(e) => updateSet(i, si, { rest: e.target.value })} placeholder="60s" /></td>
+                                    <td className="py-1.5">
+                                      <button onClick={() => removeSet(i, si)} disabled={ex.sets.length <= 1} className="rounded p-1 text-ink-400 transition hover:bg-rose-500/15 hover:text-rose-400 disabled:opacity-30" aria-label="Remove set">
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <button onClick={() => addSet(i)} className="flex items-center gap-1 text-xs font-semibold text-brand-400 transition hover:text-brand-300">
+                            <Plus className="h-3.5 w-3.5" /> Add set
+                          </button>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-ink-500">Instructions / coaching notes</label>
+                            <textarea
+                              value={ex.notes ?? ""}
+                              onChange={(e) => setExerciseNotes(i, e.target.value)}
+                              rows={2}
+                              placeholder={lib?.instructions ? lib.instructions : "Tempo, form cues, RPE, reminders for this exercise…"}
+                              className="input resize-none text-sm"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="p-3">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-xs uppercase tracking-wide text-ink-400">
-                              <th className="pb-2 pl-1 font-medium">Set</th>
-                              <th className="pb-2 font-medium">Reps</th>
-                              <th className="pb-2 font-medium">Weight</th>
-                              <th className="pb-2 font-medium">Rest</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ex.sets.map((s, si) => (
-                              <tr key={si} className="border-t border-ink-50">
-                                <td className="py-2 pl-1 font-semibold text-ink-700">{si + 1}</td>
-                                <td className="py-2 text-ink-700">{s.reps}</td>
-                                <td className="py-2 text-ink-700">{s.weight}</td>
-                                <td className="py-2 text-ink-500">{s.rest}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {selectedWorkout.exercises.length === 0 && (
                     <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/40 px-4 py-6 text-center text-sm text-ink-400">
@@ -747,10 +873,21 @@ export default function TrainingPage() {
               className="input"
               value={eVideo}
               onChange={(e) => setEVideo(e.target.value)}
-              placeholder="YouTube, Vimeo or .mp4 link"
+              placeholder="YouTube, Vimeo, Loom or .mp4 link"
             />
             <p className="mt-1 text-xs text-ink-400">
-              Paste a YouTube/Vimeo link or a direct video URL. Leave blank to use a sample demo.
+              Paste a YouTube/Vimeo/Loom link or a direct video URL. Leave blank to use a sample demo.
+            </p>
+          </Field>
+          <Field label="Written instructions (optional)">
+            <textarea
+              className="input min-h-[88px] resize-none"
+              value={eInstructions}
+              onChange={(e) => setEInstructions(e.target.value)}
+              placeholder="How to perform it: setup, execution, breathing and key form cues…"
+            />
+            <p className="mt-1 text-xs text-ink-400">
+              Shown to clients and pre-filled as the default coaching note when you add this exercise to a workout.
             </p>
           </Field>
         </div>

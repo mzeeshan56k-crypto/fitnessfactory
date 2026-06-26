@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Plus, Menu } from "lucide-react";
+import { Plus, Menu } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { PortalSwitcher } from "@/components/PortalSwitcher";
 import { AskAIButton } from "@/components/AIAssistant";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
 import { useApp } from "@/lib/store";
 
 function initialsOf(name: string) {
@@ -39,10 +40,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           <Plus className="h-4 w-4" /> Add client
         </Link>
         <ThemeToggle />
-        <button className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink-600 hover:bg-ink-100" aria-label="Notifications">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-ink-100" />
-        </button>
+        <NotificationsBell />
         <div className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 hover:bg-ink-50">
           {settings.profilePhoto ? (
             // eslint-disable-next-line @next/next/no-img-element

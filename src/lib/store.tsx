@@ -26,7 +26,7 @@ export interface AppSettings {
   brandColor: string;
   profilePhoto?: string;
   brandLogo?: string;
-  aiProvider?: "openai" | "anthropic" | "gemini";
+  aiProvider?: "openai" | "anthropic" | "gemini" | "grok";
   aiModel?: string;
   aiApiKey?: string;
   autoUpdates?: { workouts: boolean; nutrition: boolean; checkins: boolean };
@@ -390,7 +390,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: uid("e"), name: e.name ?? "New Exercise", muscle: e.muscle ?? "Full body",
       equipment: e.equipment ?? "Bodyweight", level: e.level ?? "Beginner",
       type: e.type ?? "Strength", videoThumb: e.videoThumb ?? "demo",
-      video: e.video,
+      video: e.video, instructions: e.instructions,
     };
     setDb((d) => ({ ...d, exercises: [ex, ...d.exercises] }));
     return ex;

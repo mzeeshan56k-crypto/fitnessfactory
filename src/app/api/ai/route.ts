@@ -8,7 +8,7 @@ interface ChatMessage {
 }
 
 interface Body {
-  provider: "openai" | "anthropic" | "gemini";
+  provider: "openai" | "anthropic" | "gemini" | "grok";
   apiKey: string;
   model?: string;
   messages: ChatMessage[];
@@ -19,6 +19,7 @@ const DEFAULT_MODELS = {
   openai: "gpt-4o-mini",
   anthropic: "claude-3-5-sonnet-latest",
   gemini: "gemini-1.5-flash",
+  grok: "grok-2-latest",
 };
 
 export async function POST(req: NextRequest) {
@@ -60,6 +61,20 @@ export async function POST(req: NextRequest) {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error?.message || "OpenAI request failed");
+      text = data.choices?.[0]?.message?.content ?? "";
+    } else if (provider === "grok") {
+      // xAI Grok is OpenAI-compatible.
+      const r = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: sys }, ...messages],
+          temperature: 0.7,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error?.message || data?.error || "Grok request failed");
       text = data.choices?.[0]?.message?.content ?? "";
     } else if (provider === "anthropic") {
       const r = await fetch("https://api.anthropic.com/v1/messages", {

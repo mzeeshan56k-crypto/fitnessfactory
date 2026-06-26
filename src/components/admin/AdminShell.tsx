@@ -5,12 +5,14 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Users, CreditCard, Megaphone, Workflow,
-  ShieldCheck, Library, Menu, X, Bell,
+  ShieldCheck, Library, Menu, X,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
 import { PortalSwitcher } from "@/components/PortalSwitcher";
 import { AskAIButton } from "@/components/AIAssistant";
+import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -98,10 +100,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="ml-auto flex items-center gap-3">
             <PortalSwitcher />
-            <button className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink-600 hover:bg-ink-100">
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-ink-100" />
-            </button>
+            <ThemeToggle />
+            <NotificationsBell />
             <Avatar initials="FF" size="sm" />
           </div>
         </header>
