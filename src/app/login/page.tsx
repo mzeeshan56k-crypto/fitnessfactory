@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight, Loader2, AlertCircle } from "lucide-react";
 
@@ -78,6 +79,10 @@ function LoginInner() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Something went wrong. Please try again.");
+
+      // Stamp the login time so the notification bell only surfaces activity
+      // that happens during this session.
+      try { localStorage.setItem("ffkc-login-at", String(Date.now())); } catch { /* ignore */ }
 
       const dest = next && next.startsWith("/") ? next : homeFor(data.user?.role ?? "coach");
       // Full navigation so the app reloads with the new session cookie.
@@ -207,6 +212,15 @@ function LoginInner() {
             </div>
           )}
         </div>
+
+        {ready && mode === "login" && (
+          <p className="mt-4 text-center text-xs text-ink-400">
+            Are you a client?{" "}
+            <Link href="/client-login" className="text-brand-400 hover:text-brand-500">
+              Sign in to your client portal
+            </Link>
+          </p>
+        )}
 
         <p className="mt-6 text-center text-xs text-ink-400">
           © {new Date().getFullYear()} Fitness Factory KC

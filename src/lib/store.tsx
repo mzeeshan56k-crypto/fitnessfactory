@@ -379,12 +379,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateClient = useCallback((id: string, patch: Partial<Client>) =>
     setDb((d) => ({ ...d, clients: d.clients.map((c) => (c.id === id ? { ...c, ...patch } : c)) })), []);
   const removeClient = useCallback((id: string) =>
-    setDb((d) => ({
-      ...d,
-      clients: d.clients.filter((c) => c.id !== id),
-      conversations: d.conversations.filter((c) => c.clientId !== id),
-      currentClientId: d.currentClientId === id ? (d.clients.find((c) => c.id !== id)?.id ?? null) : d.currentClientId,
-    })), []);
+    setDb((d) => {
+      // Strip every per-client record so a removed client leaves no trace on the
+      // dashboard (sessions, check-ins, photos, weight/nutrition, notes, plans).
+      const without = <T,>(map: Record<string, T>) => {
+        const { [id]: _drop, ...rest } = map;
+        return rest;
+      };
+      return {
+        ...d,
+        clients: d.clients.filter((c) => c.id !== id),
+        conversations: d.conversations.filter((c) => c.clientId !== id),
+        checkins: d.checkins.filter((c) => c.clientId !== id),
+        appointments: d.appointments.filter((a) => a.clientId !== id),
+        completions: without(d.completions),
+        photos: without(d.photos),
+        weightLogs: without(d.weightLogs),
+        nutritionLogs: without(d.nutritionLogs),
+        clientPlans: without(d.clientPlans),
+        formReviews: without(d.formReviews),
+        clientNotes: without(d.clientNotes),
+        recoveryNotes: without(d.recoveryNotes),
+        currentClientId: d.currentClientId === id ? (d.clients.find((c) => c.id !== id)?.id ?? null) : d.currentClientId,
+      };
+    }), []);
   const setCurrentClient = useCallback((id: string | null) =>
     setDb((d) => ({ ...d, currentClientId: id })), []);
 

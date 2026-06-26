@@ -33,6 +33,10 @@ export function NotificationsBell() {
   const clients = useMyClients();
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useLocalState<number>("ffkc-notif-seen", 0);
+  // Only surface activity from the current login session. Fall back to the last
+  // 7 days if we never recorded a login time in this browser.
+  const [loginAt] = useLocalState<number>("ffkc-login-at", 0);
+  const since = loginAt || Date.now() - 7 * 24 * 60 * 60 * 1000;
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,9 +90,10 @@ export function NotificationsBell() {
     });
   }
 
-  notifs.sort((a, b) => b.ts - a.ts);
-  const recent = notifs.slice(0, 12);
-  const unread = notifs.filter((n) => n.ts > lastSeen).length;
+  // Keep only what happened during this login session, newest first.
+  const session = notifs.filter((n) => n.ts >= since).sort((a, b) => b.ts - a.ts);
+  const recent = session.slice(0, 12);
+  const unread = session.filter((n) => n.ts > lastSeen).length;
 
   function toggle() {
     setOpen((o) => {

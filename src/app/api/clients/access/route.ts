@@ -13,9 +13,11 @@ export async function GET() {
   }
 
   const accounts = await listAccounts();
-  const access: Record<string, "invited" | "active"> = {};
+  const access: Record<string, "invited" | "active" | "suspended"> = {};
   for (const a of accounts) {
-    if (a.clientId) access[a.clientId] = a.status === "active" ? "active" : "invited";
+    if (!a.clientId) continue;
+    access[a.clientId] =
+      a.status === "active" ? "active" : a.status === "suspended" ? "suspended" : "invited";
   }
   return NextResponse.json({ access });
 }

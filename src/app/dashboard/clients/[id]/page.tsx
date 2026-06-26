@@ -76,7 +76,8 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [draft, setDraft] = useState("");
 
   // App-access status for this client (derived from accounts) + invite flow.
-  const [access, setAccess] = useState<"invited" | "active" | null>(null);
+  const [access, setAccess] = useState<"invited" | "active" | "suspended" | null>(null);
+  const [accessBusy, setAccessBusy] = useState(false);
   const [inviting, setInviting] = useState(false);
   const [inviteRes, setInviteRes] = useState<{ url: string; sent: boolean; error?: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -255,10 +256,40 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setEditOpen(false);
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!c) return;
+    // Revoke the login first so a removed client can never sign back in, then
+    // purge their data from the workspace.
+    try {
+      await fetch("/api/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", email: c.email, clientId: c.id }),
+      });
+    } catch {
+      /* best effort — workspace removal still proceeds */
+    }
     removeClient(c.id);
     router.push("/dashboard/clients");
+  }
+
+  // Suspend or restore the client's app login. Suspended clients keep their data
+  // but can't sign in until restored.
+  async function toggleAccess(suspend: boolean) {
+    if (!c || accessBusy) return;
+    setAccessBusy(true);
+    try {
+      const res = await fetch("/api/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: suspend ? "suspend" : "activate", email: c.email, clientId: c.id }),
+      });
+      if (res.ok) setAccess(suspend ? "suspended" : "active");
+    } catch {
+      /* ignore */
+    } finally {
+      setAccessBusy(false);
+    }
   }
 
   function saveNote() {
@@ -310,7 +341,31 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           </div>
           <div className="flex flex-wrap gap-2">
             {access === "active" ? (
-              <span className="badge bg-accent-500/15 text-accent-400"><KeyRound className="h-3 w-3" /> Has app login</span>
+              <>
+                <span className="badge bg-accent-500/15 text-accent-400"><KeyRound className="h-3 w-3" /> Has app login</span>
+                <button
+                  className="btn-secondary text-amber-500 hover:bg-amber-500/15"
+                  onClick={() => toggleAccess(true)}
+                  disabled={accessBusy}
+                  title="Block this client from signing in"
+                >
+                  {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                  Suspend access
+                </button>
+              </>
+            ) : access === "suspended" ? (
+              <>
+                <span className="badge bg-amber-500/15 text-amber-500"><KeyRound className="h-3 w-3" /> Access suspended</span>
+                <button
+                  className="btn-secondary text-accent-500 hover:bg-accent-500/15"
+                  onClick={() => toggleAccess(false)}
+                  disabled={accessBusy}
+                  title="Let this client sign in again"
+                >
+                  {accessBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                  Restore access
+                </button>
+              </>
             ) : (
               <button
                 className="btn-secondary"
