@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { VideoModal } from "@/components/ui/VideoModal";
 import { ExerciseAnimation } from "@/components/ui/ExerciseAnimation";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
-import type { Workout, WorkoutExercise, Exercise } from "@/lib/data";
+import type { Workout, WorkoutExercise, Exercise, Program } from "@/lib/data";
 import { sampleVideo } from "@/lib/media";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -62,6 +62,7 @@ export default function TrainingPage() {
   const [exerciseModal, setExerciseModal] = useState(false);
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
+  const [editingProgramId, setEditingProgramId] = useState<string | null>(null);
 
   // Workout form
   const [wName, setWName] = useState("");
@@ -160,19 +161,50 @@ export default function TrainingPage() {
 
   function submitProgram() {
     if (!pName.trim()) return;
-    app.addProgram({
-      name: pName.trim(),
-      weeks: Number(pWeeks) || 8,
-      workoutsPerWeek: Number(pPerWeek) || 3,
-      focus: pFocus.trim() || "General",
-      color: pColor,
-    });
+    if (editingProgramId) {
+      app.updateProgram(editingProgramId, {
+        name: pName.trim(),
+        weeks: Number(pWeeks) || 8,
+        workoutsPerWeek: Number(pPerWeek) || 3,
+        focus: pFocus.trim() || "General",
+        color: pColor,
+      });
+    } else {
+      app.addProgram({
+        name: pName.trim(),
+        weeks: Number(pWeeks) || 8,
+        workoutsPerWeek: Number(pPerWeek) || 3,
+        focus: pFocus.trim() || "General",
+        color: pColor,
+      });
+    }
     setPName("");
     setPWeeks("8");
     setPPerWeek("3");
     setPFocus("General");
     setPColor(colorPresets[0].value);
+    setEditingProgramId(null);
     setProgramModal(false);
+  }
+
+  function openCreateProgram() {
+    setEditingProgramId(null);
+    setPName("");
+    setPWeeks("8");
+    setPPerWeek("3");
+    setPFocus("General");
+    setPColor(colorPresets[0].value);
+    setProgramModal(true);
+  }
+
+  function openEditProgram(p: Program) {
+    setEditingProgramId(p.id);
+    setPName(p.name);
+    setPWeeks(String(p.weeks));
+    setPPerWeek(String(p.workoutsPerWeek));
+    setPFocus(p.focus);
+    setPColor(p.color);
+    setProgramModal(true);
   }
 
   function submitExercise() {
@@ -344,7 +376,7 @@ export default function TrainingPage() {
       {tab === "programs" && (
         <>
           <div className="mb-4 flex justify-end">
-            <button className="btn-secondary" onClick={() => setProgramModal(true)}>
+            <button className="btn-secondary" onClick={openCreateProgram}>
               <Plus className="h-4 w-4" />
               New program
             </button>
@@ -355,7 +387,7 @@ export default function TrainingPage() {
               title="No programs yet"
               description="Create a multi-week program to assign to your clients."
               action={
-                <button className="btn-primary" onClick={() => setProgramModal(true)}>
+                <button className="btn-primary" onClick={openCreateProgram}>
                   <Plus className="h-4 w-4" />
                   Create program
                 </button>
@@ -374,13 +406,22 @@ export default function TrainingPage() {
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-semibold text-ink-900">{p.name}</h3>
-                      <button
-                        onClick={() => app.removeProgram(p.id)}
-                        aria-label={`Delete ${p.name}`}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          onClick={() => openEditProgram(p)}
+                          aria-label={`Edit ${p.name}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => app.removeProgram(p.id)}
+                          aria-label={`Delete ${p.name}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                     <p className="mt-1 text-sm text-ink-500">
                       {p.weeks} weeks · {p.workoutsPerWeek}×/wk
@@ -806,18 +847,18 @@ export default function TrainingPage() {
         </div>
       </Modal>
 
-      {/* New program modal */}
+      {/* New / edit program modal */}
       <Modal
         open={programModal}
-        onClose={() => setProgramModal(false)}
-        title="New program"
+        onClose={() => { setProgramModal(false); setEditingProgramId(null); }}
+        title={editingProgramId ? "Edit program" : "New program"}
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setProgramModal(false)}>
+            <button className="btn-secondary" onClick={() => { setProgramModal(false); setEditingProgramId(null); }}>
               Cancel
             </button>
             <button className="btn-primary" onClick={submitProgram} disabled={!pName.trim()}>
-              Create
+              {editingProgramId ? "Save changes" : "Create"}
             </button>
           </>
         }

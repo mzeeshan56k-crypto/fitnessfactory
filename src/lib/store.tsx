@@ -152,6 +152,7 @@ interface AppContextValue extends DB {
   removeWorkout: (id: string) => void;
   // programs
   addProgram: (p: Partial<Program>) => Program;
+  updateProgram: (id: string, patch: Partial<Program>) => void;
   removeProgram: (id: string) => void;
   // meal plans
   addMealPlan: (m: Partial<MealPlan>) => MealPlan;
@@ -429,6 +430,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDb((d) => ({ ...d, programs: [program, ...d.programs] }));
     return program;
   }, []);
+  const updateProgram = useCallback((id: string, patch: Partial<Program>) =>
+    setDb((d) => ({
+      ...d,
+      programs: d.programs.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    })), []);
   const removeProgram = useCallback((id: string) =>
     setDb((d) => ({ ...d, programs: d.programs.filter((p) => p.id !== id) })), []);
 
@@ -756,7 +762,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addClient, updateClient, removeClient, setCurrentClient,
     addExercise, updateExercise, removeExercise,
     addWorkout, updateWorkout, removeWorkout,
-    addProgram, removeProgram,
+    addProgram, updateProgram, removeProgram,
     addMealPlan, removeMealPlan,
     sendMessage,
     addAppointment, removeAppointment,
@@ -774,7 +780,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     db, clientsWithMetrics, hydrated, session, signOut, set, loadStarterContent, resetAll, addForm, updateForm, removeForm,
     addClient, updateClient, removeClient,
     setCurrentClient, addExercise, updateExercise, removeExercise, addWorkout, updateWorkout, removeWorkout,
-    addProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
+    addProgram, updateProgram, removeProgram, addMealPlan, removeMealPlan, sendMessage, addAppointment,
     removeAppointment, addCard, moveCard, removeCard, addChallenge, toggleJoinChallenge, removeChallenge,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
