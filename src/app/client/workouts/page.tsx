@@ -48,12 +48,21 @@ export default function ClientWorkoutsPage() {
       {/* Header / plan hero */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-700 to-ink-50 p-6 text-white shadow-glow">
         <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-brand-100">
-          <CalendarDays className="h-4 w-4" /> Your training plan
+          <CalendarDays className="h-4 w-4" /> Training Program
         </div>
         <h1 className="mt-1 text-2xl font-bold">{c.program}</h1>
         <p className="mt-1 text-sm text-brand-100">
-          Your training plan · {workouts.length} workouts this week
+          {workouts.length} workouts this week
         </p>
+        {/* Show program instructions if any */}
+        {(() => {
+          const prog = app.programs.find((p) => p.name === c.program);
+          return prog?.instructions ? (
+            <p className="mt-3 rounded-xl bg-white/10 px-4 py-3 text-sm text-brand-50 leading-relaxed">
+              {prog.instructions}
+            </p>
+          ) : null;
+        })()}
       </section>
 
       {/* Workout list */}

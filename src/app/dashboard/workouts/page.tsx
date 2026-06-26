@@ -69,6 +69,7 @@ export default function TrainingPage() {
   const [wCategory, setWCategory] = useState("Strength");
   const [wDuration, setWDuration] = useState("45");
   const [wDifficulty, setWDifficulty] = useState<(typeof difficulties)[number]>("Beginner");
+  const [wInstructions, setWInstructions] = useState("");
 
   // Program form
   const [pName, setPName] = useState("");
@@ -76,6 +77,7 @@ export default function TrainingPage() {
   const [pPerWeek, setPPerWeek] = useState("3");
   const [pFocus, setPFocus] = useState("General");
   const [pColor, setPColor] = useState(colorPresets[0].value);
+  const [pInstructions, setPInstructions] = useState("");
 
   // Exercise form
   const [eName, setEName] = useState("");
@@ -122,6 +124,7 @@ export default function TrainingPage() {
         category: wCategory.trim() || "Strength",
         durationMin: Number(wDuration) || 45,
         difficulty: wDifficulty,
+        instructions: wInstructions.trim() || undefined,
       });
     } else {
       const w = app.addWorkout({
@@ -130,6 +133,7 @@ export default function TrainingPage() {
         durationMin: Number(wDuration) || 45,
         difficulty: wDifficulty,
         exercises: [],
+        instructions: wInstructions.trim() || undefined,
       });
       setSelectedId(w.id);
     }
@@ -137,6 +141,7 @@ export default function TrainingPage() {
     setWCategory("Strength");
     setWDuration("45");
     setWDifficulty("Beginner");
+    setWInstructions("");
     setEditingWorkoutId(null);
     setWorkoutModal(false);
   }
@@ -147,6 +152,7 @@ export default function TrainingPage() {
     setWCategory("Strength");
     setWDuration("45");
     setWDifficulty("Beginner");
+    setWInstructions("");
     setWorkoutModal(true);
   }
 
@@ -156,6 +162,7 @@ export default function TrainingPage() {
     setWCategory(w.category);
     setWDuration(String(w.durationMin));
     setWDifficulty(w.difficulty);
+    setWInstructions(w.instructions ?? "");
     setWorkoutModal(true);
   }
 
@@ -168,6 +175,7 @@ export default function TrainingPage() {
         workoutsPerWeek: Number(pPerWeek) || 3,
         focus: pFocus.trim() || "General",
         color: pColor,
+        instructions: pInstructions.trim() || undefined,
       });
     } else {
       app.addProgram({
@@ -176,6 +184,7 @@ export default function TrainingPage() {
         workoutsPerWeek: Number(pPerWeek) || 3,
         focus: pFocus.trim() || "General",
         color: pColor,
+        instructions: pInstructions.trim() || undefined,
       });
     }
     setPName("");
@@ -183,6 +192,7 @@ export default function TrainingPage() {
     setPPerWeek("3");
     setPFocus("General");
     setPColor(colorPresets[0].value);
+    setPInstructions("");
     setEditingProgramId(null);
     setProgramModal(false);
   }
@@ -194,6 +204,7 @@ export default function TrainingPage() {
     setPPerWeek("3");
     setPFocus("General");
     setPColor(colorPresets[0].value);
+    setPInstructions("");
     setProgramModal(true);
   }
 
@@ -204,6 +215,7 @@ export default function TrainingPage() {
     setPPerWeek(String(p.workoutsPerWeek));
     setPFocus(p.focus);
     setPColor(p.color);
+    setPInstructions(p.instructions ?? "");
     setProgramModal(true);
   }
 
@@ -844,6 +856,15 @@ export default function TrainingPage() {
               </select>
             </Field>
           </div>
+          <Field label="Trainer instructions (shown to client)">
+            <textarea
+              className="input resize-none"
+              rows={3}
+              value={wInstructions}
+              onChange={(e) => setWInstructions(e.target.value)}
+              placeholder="Say something about this workout — goals, tips, what to focus on…"
+            />
+          </Field>
         </div>
       </Modal>
 
@@ -915,6 +936,15 @@ export default function TrainingPage() {
                 />
               ))}
             </div>
+          </Field>
+          <Field label="Trainer instructions (shown to client)">
+            <textarea
+              className="input resize-none"
+              rows={3}
+              value={pInstructions}
+              onChange={(e) => setPInstructions(e.target.value)}
+              placeholder="Say something about this training phase — goals, focus, mindset…"
+            />
           </Field>
         </div>
       </Modal>

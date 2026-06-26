@@ -60,6 +60,7 @@ export interface Workout {
   durationMin: number;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
   exercises: WorkoutExercise[];
+  instructions?: string; // trainer instructions shown to the client
 }
 
 export interface Program {
@@ -71,6 +72,7 @@ export interface Program {
   clientsAssigned: number;
   color: string;
   workoutIds?: string[]; // the workouts this program delivers
+  instructions?: string; // trainer notes about this phase shown to the client
 }
 
 export interface MealPlan {

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home, Dumbbell, Apple, LineChart, MessageSquare,
   Activity, CalendarCheck, GraduationCap, Trophy, ClipboardCheck, Award, UsersRound,
-  HeartPulse, FileText,
+  HeartPulse, FileText, Target, CalendarDays, Medal, Video,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
@@ -15,24 +15,27 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { ClientNotificationsBell } from "@/components/client/ClientNotificationsBell";
 import { cn } from "@/lib/utils";
 
-const navToday = { href: "/client", label: "Today", icon: Home };
-const navWorkouts = { href: "/client/workouts", label: "Workouts", icon: Dumbbell };
-const navNutrition = { href: "/client/nutrition", label: "Nutrition", icon: Apple };
+const navToday = { href: "/client", label: "Dash", icon: Home };
+const navCalendar = { href: "/client/schedule", label: "Calendar", icon: CalendarDays };
+const navGoals = { href: "/client/goals", label: "Goals & Habits", icon: Target };
+const navWorkouts = { href: "/client/workouts", label: "Training Program", icon: Dumbbell };
+const navNutrition = { href: "/client/nutrition", label: "Meal Plan", icon: Apple };
 const navProgress = { href: "/client/progress", label: "Progress", icon: LineChart };
-const navBiometrics = { href: "/client/biometrics", label: "Biometrics", icon: Activity };
-const navRecovery = { href: "/client/recovery", label: "Recovery", icon: HeartPulse };
+const navBadges = { href: "/client/achievements", label: "Badges Earned", icon: Medal };
+const navClasses = { href: "/client/classes", label: "Classes", icon: Video };
 const navChallenges = { href: "/client/challenges", label: "Challenges", icon: Trophy };
 const navCheckin = { href: "/client/checkin", label: "Check-in", icon: ClipboardCheck };
+const navBiometrics = { href: "/client/biometrics", label: "Biometrics", icon: Activity };
+const navRecovery = { href: "/client/recovery", label: "Recovery", icon: HeartPulse };
 const navForms = { href: "/client/forms", label: "Forms", icon: FileText };
-const navSchedule = { href: "/client/schedule", label: "Booking", icon: CalendarCheck };
 const navResources = { href: "/client/resources", label: "Learn", icon: GraduationCap };
-const navAchievements = { href: "/client/achievements", label: "Achievements", icon: Award };
 const navCommunity = { href: "/client/community", label: "Community", icon: UsersRound };
 const navCoach = { href: "/client/messages", label: "Coach", icon: MessageSquare };
 
 const nav = [
-  navToday, navWorkouts, navNutrition, navProgress, navBiometrics, navRecovery,
-  navChallenges, navCheckin, navForms, navSchedule, navResources, navAchievements, navCommunity, navCoach,
+  navToday, navCalendar, navGoals, navWorkouts, navNutrition, navProgress,
+  navBadges, navClasses, navChallenges, navCheckin, navBiometrics, navRecovery,
+  navForms, navResources, navCommunity, navCoach,
 ];
 
 // Mobile bottom bar shows the 5 most-used destinations.

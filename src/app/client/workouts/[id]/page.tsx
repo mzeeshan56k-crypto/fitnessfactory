@@ -184,6 +184,11 @@ function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Wo
             <Flame className="h-4 w-4" /> {w.difficulty}
           </span>
         </div>
+        {w.instructions && (
+          <p className="mt-3 rounded-xl bg-white/10 px-4 py-3 text-sm text-brand-50 leading-relaxed">
+            {w.instructions}
+          </p>
+        )}
 
         {/* Progress indicator */}
         <div className="mt-5">
