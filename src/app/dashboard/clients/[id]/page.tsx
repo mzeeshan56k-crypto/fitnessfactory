@@ -6,16 +6,17 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, MessageSquare, Pencil, Trash2, Scale, Target, Flag, Activity,
   Dumbbell, Calendar, Sparkles, Clock, Layers, LineChart, Loader2, Images,
-  Mail, Check, KeyRound, X, Apple, CheckCircle2, ClipboardCheck, UserCog, FileText,
+  Mail, Check, KeyRound, X, Apple, CheckCircle2, ClipboardCheck, UserCog, FileText, Plus,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { PhotoCompare } from "@/components/PhotoCompare";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ShareInvite } from "@/components/ui/ShareInvite";
+import { MediaEditor } from "@/components/MediaEditor";
 import { WeightChart, AdherenceRing } from "@/components/dashboard/Charts";
 import { useApp } from "@/lib/store";
-import { type ClientStatus } from "@/lib/data";
+import { type ClientStatus, type TrainingMedia } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 const statusBadge: Record<ClientStatus, string> = {
@@ -47,6 +48,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     workouts: libWorkouts, programs, mealPlans, forms, clientPlans, completions, photos,
     weightLogs, checkins, nutritionLogs, session, assignCoach,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
+    addMealPlan,
   } = useApp();
   const [coaches, setCoaches] = useState<{ email: string; name: string; role: string }[]>([]);
   const router = useRouter();
@@ -55,6 +57,11 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [tab, setTab] = useState<Tab>("Overview");
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Create/upload a meal plan straight from the client profile.
+  const [mealOpen, setMealOpen] = useState(false);
+  const [mealForm, setMealForm] = useState({ name: "", calories: "2000", protein: "150", carbs: "200", fat: "60" });
+  const [mealMedia, setMealMedia] = useState<TrainingMedia[]>([]);
 
   const [edit, setEdit] = useState({
     name: "",
@@ -309,6 +316,25 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setDraft("");
   }
 
+  // Create a meal plan (optionally just an uploaded PDF/photo) and prescribe it.
+  function submitMealPlan() {
+    if (!c) return;
+    const name = mealForm.name.trim();
+    if (!name) return;
+    const m = addMealPlan({
+      name,
+      calories: Number(mealForm.calories) || 0,
+      protein: Number(mealForm.protein) || 0,
+      carbs: Number(mealForm.carbs) || 0,
+      fat: Number(mealForm.fat) || 0,
+      tag: "Custom",
+      meals: [],
+      media: mealMedia.length ? mealMedia : undefined,
+    });
+    setClientMealPlan(c.id, m.id);
+    setMealOpen(false);
+  }
+
   return (
     <>
       <Link
@@ -528,9 +554,14 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
               </div>
 
               <div className="card p-6">
-                <div className="flex items-center gap-2">
-                  <Apple className="h-5 w-5 text-accent-400" />
-                  <h2 className="font-semibold text-ink-900">Nutrition plan</h2>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Apple className="h-5 w-5 text-accent-400" />
+                    <h2 className="font-semibold text-ink-900">Nutrition plan</h2>
+                  </div>
+                  <button className="btn-secondary px-2.5 py-1.5 text-xs" onClick={() => { setMealForm({ name: "", calories: "2000", protein: "150", carbs: "200", fat: "60" }); setMealMedia([]); setMealOpen(true); }}>
+                    <Plus className="h-3.5 w-3.5" /> Create / upload
+                  </button>
                 </div>
                 <p className="mt-1 text-sm text-ink-500">Assign a meal plan this client will see.</p>
                 <select
@@ -543,6 +574,9 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>
+                <p className="mt-2 text-xs text-ink-400">
+                  Build full meal plans with recipes & PDFs in <Link href="/dashboard/nutrition" className="text-brand-400">Nutrition</Link>.
+                </p>
               </div>
             </div>
 
@@ -1087,6 +1121,40 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Create / upload meal plan, then prescribe to this client */}
+      <Modal
+        open={mealOpen}
+        onClose={() => setMealOpen(false)}
+        title={`New nutrition plan for ${c.name.split(" ")[0]}`}
+        size="lg"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setMealOpen(false)}>Cancel</button>
+            <button className="btn-primary" onClick={submitMealPlan} disabled={!mealForm.name.trim()}>
+              Create & prescribe
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Plan name">
+            <input autoFocus className="input" value={mealForm.name} onChange={(e) => setMealForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. High-protein cut" />
+          </Field>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Field label="Calories"><input type="number" className="input" value={mealForm.calories} onChange={(e) => setMealForm((f) => ({ ...f, calories: e.target.value }))} /></Field>
+            <Field label="Protein (g)"><input type="number" className="input" value={mealForm.protein} onChange={(e) => setMealForm((f) => ({ ...f, protein: e.target.value }))} /></Field>
+            <Field label="Carbs (g)"><input type="number" className="input" value={mealForm.carbs} onChange={(e) => setMealForm((f) => ({ ...f, carbs: e.target.value }))} /></Field>
+            <Field label="Fat (g)"><input type="number" className="input" value={mealForm.fat} onChange={(e) => setMealForm((f) => ({ ...f, fat: e.target.value }))} /></Field>
+          </div>
+          <Field label="Upload a plan (PDF) or recipe pictures">
+            <MediaEditor media={mealMedia} onChange={setMealMedia} />
+          </Field>
+          <p className="text-xs text-ink-400">
+            Tip: you can just upload a PDF here and skip the macros — it&apos;ll be prescribed and visible to {c.name.split(" ")[0]} right away.
+          </p>
+        </div>
       </Modal>
     </>
   );

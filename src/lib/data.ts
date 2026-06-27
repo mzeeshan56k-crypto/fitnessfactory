@@ -51,6 +51,8 @@ export interface WorkoutExercise {
   muscle: string;
   sets: WorkoutSet[];
   notes?: string;
+  // Where this movement sits in the session flow. Defaults to "main".
+  section?: "warmup" | "main" | "cooldown";
 }
 
 // An image or video the trainer attaches to a workout / program. Images are
@@ -74,6 +76,15 @@ export interface Workout {
   media?: TrainingMedia[]; // pictures / videos shown to the client
 }
 
+// A training phase inside a program (e.g. "Week 1-4"). Each phase carries its
+// own set of workouts, mirroring Trainerize's phase-based program structure.
+export interface ProgramPhase {
+  id: string;
+  name: string;
+  weeks: number;
+  workoutIds: string[];
+}
+
 export interface Program {
   id: string;
   name: string;
@@ -82,7 +93,8 @@ export interface Program {
   focus: string;
   clientsAssigned: number;
   color: string;
-  workoutIds?: string[]; // the workouts this program delivers
+  workoutIds?: string[]; // flattened list of every workout the program delivers
+  phases?: ProgramPhase[]; // phase-by-phase structure (Week 1-4, Week 5-8, …)
   instructions?: string; // trainer notes about this phase shown to the client
   media?: TrainingMedia[]; // pictures / videos shown to the client
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Plus, Dumbbell, Layers, Library, GripVertical, Clock, Search,
   Play, Users, Trash2, Loader2, ChevronRight, ArrowUp, ArrowDown, X, Copy, Pencil,
@@ -69,6 +69,17 @@ export default function TrainingPage() {
   const [editingProgramId, setEditingProgramId] = useState<string | null>(null);
   const [viewProgramId, setViewProgramId] = useState<string | null>(null);
   const [assignProgramId, setAssignProgramId] = useState<string | null>(null);
+
+  // Deep-link: /dashboard/workouts?select=<workoutId> opens that workout's
+  // builder directly (used by the Program builder's "Build" buttons).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sel = params.get("select");
+    if (sel) {
+      setTab("workouts");
+      setSelectedId(sel);
+    }
+  }, []);
 
   // Workout form
   const [wName, setWName] = useState("");
@@ -336,6 +347,9 @@ export default function TrainingPage() {
   }
   function setExerciseNotes(exIdx: number, notes: string) {
     patchExercises((list) => list.map((ex, i) => (i === exIdx ? { ...ex, notes } : ex)));
+  }
+  function setExerciseSection(exIdx: number, section: "warmup" | "main" | "cooldown") {
+    patchExercises((list) => list.map((ex, i) => (i === exIdx ? { ...ex, section } : ex)));
   }
   function removeExerciseAt(exIdx: number) {
     patchExercises((list) => list.filter((_, i) => i !== exIdx));
@@ -626,6 +640,21 @@ export default function TrainingPage() {
                             <div className="truncate text-sm font-semibold text-ink-900">{ex.name}</div>
                             <div className="text-xs text-ink-500">{ex.muscle}</div>
                           </div>
+                          <select
+                            value={ex.section ?? "main"}
+                            onChange={(e) => setExerciseSection(i, e.target.value as "warmup" | "main" | "cooldown")}
+                            className={cn(
+                              "h-8 shrink-0 rounded-lg border-0 px-2 py-0 text-xs font-medium",
+                              (ex.section ?? "main") === "warmup" && "bg-amber-500/15 text-amber-500",
+                              (ex.section ?? "main") === "main" && "bg-brand-500/15 text-brand-400",
+                              (ex.section ?? "main") === "cooldown" && "bg-sky-500/15 text-sky-500",
+                            )}
+                            title="Section of the session"
+                          >
+                            <option value="warmup">Warm-up</option>
+                            <option value="main">Main</option>
+                            <option value="cooldown">Cool-down</option>
+                          </select>
                           <div className="flex items-center gap-1">
                             <button onClick={() => moveExercise(i, i - 1)} disabled={i === 0} className="rounded p-1 text-ink-400 transition hover:bg-ink-100 hover:text-ink-700 disabled:opacity-30" aria-label="Move up">
                               <ArrowUp className="h-4 w-4" />

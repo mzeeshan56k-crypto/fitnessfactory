@@ -1,28 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import {
-  Loader2, Dumbbell, Plus, X, CheckCircle2, CalendarDays, Layers, Target, Palette,
+  Loader2, Dumbbell, Plus, X, Layers, ChevronRight, Trash2, Pencil,
+  ArrowUp, ArrowDown, SlidersHorizontal,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
-import { EmptyState } from "@/components/ui/Modal";
-import { useApp } from "@/lib/store";
-import { useLocalState } from "@/lib/useLocalState";
+import { EmptyState, Modal, Field } from "@/components/ui/Modal";
+import { useApp, uid } from "@/lib/store";
+import type { Program, ProgramPhase } from "@/lib/data";
 import { cn } from "@/lib/utils";
-
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const colorOptions: { label: string; value: string; swatch: string }[] = [
-  { label: "Brand", value: "from-brand-500 to-brand-700", swatch: "from-brand-500 to-brand-700" },
-  { label: "Accent", value: "from-accent-500 to-accent-700", swatch: "from-accent-500 to-accent-700" },
-  { label: "Purple", value: "from-purple-500 to-purple-700", swatch: "from-purple-500 to-purple-700" },
-  { label: "Amber", value: "from-amber-500 to-amber-700", swatch: "from-amber-500 to-amber-700" },
-  { label: "Indigo", value: "from-indigo-500 to-indigo-700", swatch: "from-indigo-500 to-indigo-700" },
-  { label: "Rose", value: "from-rose-500 to-rose-700", swatch: "from-rose-500 to-rose-700" },
-];
-
-// assignment record: dayKey "w{week}-d{day}" -> array of workout ids
-type Assignments = Record<string, string[]>;
 
 function Loading() {
   return (
@@ -32,315 +20,350 @@ function Loading() {
   );
 }
 
+const newPhase = (n: number): ProgramPhase => ({
+  id: uid("ph"), name: `Week ${n * 4 - 3}-${n * 4}`, weeks: 4, workoutIds: [],
+});
+
 export default function ProgramBuilderPage() {
   const app = useApp();
-
-  const [meta, setMeta] = useLocalState("ffkc-pb-meta", {
-    name: "",
-    weeks: 8,
-    workoutsPerWeek: 3,
-    focus: "Strength",
-    color: colorOptions[0].value,
-  });
-  const [assignments, setAssignments] = useLocalState<Assignments>("ffkc-pb-assign", {});
-  const [activeWeek, setActiveWeek] = useState(0);
-  const [picks, setPicks] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState(false);
-
-  const workoutById = useMemo(
-    () => Object.fromEntries(app.workouts.map((w) => [w.id, w])),
-    [app.workouts],
-  );
-
-  const totalAssigned = useMemo(
-    () => Object.values(assignments).reduce((n, arr) => n + arr.length, 0),
-    [assignments],
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
+  const [newProgramOpen, setNewProgramOpen] = useState(false);
+  const [newProgramName, setNewProgramName] = useState("");
+  const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
+  const [quickWorkoutName, setQuickWorkoutName] = useState("");
 
   if (!app.hydrated) return <Loading />;
 
-  const weeks = Math.max(1, Math.min(16, Number(meta.weeks) || 1));
+  const program = app.programs.find((p) => p.id === selectedId) ?? null;
+  // Ensure the program we edit always has at least one phase to work in.
+  const phases: ProgramPhase[] = program?.phases?.length
+    ? program.phases
+    : program
+      ? [{ id: "legacy", name: "Phase 1", weeks: program.weeks, workoutIds: program.workoutIds ?? [] }]
+      : [];
+  const activePhase = phases.find((ph) => ph.id === activePhaseId) ?? phases[0] ?? null;
 
-  function dayKey(week: number, day: number) {
-    return `w${week}-d${day}`;
+  function savePhases(next: ProgramPhase[]) {
+    if (!program) return;
+    app.updateProgram(program.id, { phases: next });
   }
 
-  function addWorkout(key: string) {
-    const wid = picks[key];
-    if (!wid) return;
-    setAssignments((a) => {
-      const existing = a[key] ?? [];
-      if (existing.includes(wid)) return a;
-      return { ...a, [key]: [...existing, wid] };
-    });
-    setPicks((p) => ({ ...p, [key]: "" }));
-    setSaved(false);
+  function createProgram() {
+    const name = newProgramName.trim();
+    if (!name) return;
+    const p = app.addProgram({ name, phases: [newPhase(1)] });
+    setSelectedId(p.id);
+    setActivePhaseId(p.phases?.[0]?.id ?? null);
+    setNewProgramName("");
+    setNewProgramOpen(false);
   }
 
-  function removeWorkout(key: string, wid: string) {
-    setAssignments((a) => ({ ...a, [key]: (a[key] ?? []).filter((x) => x !== wid) }));
-    setSaved(false);
+  function addPhase() {
+    if (!program) return;
+    const next = [...phases, newPhase(phases.length + 1)];
+    savePhases(next);
+    setActivePhaseId(next[next.length - 1].id);
   }
 
-  function saveProgram(e: React.FormEvent) {
-    e.preventDefault();
-    // Collect the unique workouts placed across the schedule.
-    const workoutIds = Array.from(new Set(Object.values(assignments).flat()));
-    app.addProgram({
-      name: meta.name.trim() || "Untitled Program",
-      weeks,
-      workoutsPerWeek: Math.max(1, Number(meta.workoutsPerWeek) || 1),
-      focus: meta.focus.trim() || "General",
-      color: meta.color,
-      workoutIds,
-    });
-    setSaved(true);
-    // Reset the builder for the next program.
-    setAssignments({});
-    setMeta({ name: "", weeks: 8, workoutsPerWeek: 3, focus: "Strength", color: colorOptions[0].value });
+  function removePhase(id: string) {
+    if (!program) return;
+    const next = phases.filter((ph) => ph.id !== id);
+    savePhases(next.length ? next : [newPhase(1)]);
+    setActivePhaseId(null);
   }
+
+  function renamePhase(id: string, name: string) {
+    savePhases(phases.map((ph) => (ph.id === id ? { ...ph, name } : ph)));
+  }
+  function setPhaseWeeks(id: string, weeks: number) {
+    savePhases(phases.map((ph) => (ph.id === id ? { ...ph, weeks } : ph)));
+  }
+
+  function addWorkoutToPhase(workoutId: string) {
+    if (!activePhase) return;
+    savePhases(phases.map((ph) =>
+      ph.id === activePhase.id && !ph.workoutIds.includes(workoutId)
+        ? { ...ph, workoutIds: [...ph.workoutIds, workoutId] }
+        : ph,
+    ));
+  }
+  function removeWorkoutFromPhase(workoutId: string) {
+    if (!activePhase) return;
+    savePhases(phases.map((ph) =>
+      ph.id === activePhase.id ? { ...ph, workoutIds: ph.workoutIds.filter((w) => w !== workoutId) } : ph,
+    ));
+  }
+  function moveWorkout(idx: number, dir: -1 | 1) {
+    if (!activePhase) return;
+    const ids = [...activePhase.workoutIds];
+    const j = idx + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[idx], ids[j]] = [ids[j], ids[idx]];
+    savePhases(phases.map((ph) => (ph.id === activePhase.id ? { ...ph, workoutIds: ids } : ph)));
+  }
+
+  function quickCreateWorkout() {
+    const name = quickWorkoutName.trim();
+    if (!name || !activePhase) return;
+    const w = app.addWorkout({ name, category: "Strength", durationMin: 45, difficulty: "Beginner", exercises: [] });
+    addWorkoutToPhase(w.id);
+    setQuickWorkoutName("");
+    setAddWorkoutOpen(false);
+  }
+
+  const phaseWorkouts = activePhase
+    ? activePhase.workoutIds.map((id) => app.workouts.find((w) => w.id === id)).filter((w): w is NonNullable<typeof w> => Boolean(w))
+    : [];
+  const available = app.workouts.filter((w) => !activePhase?.workoutIds.includes(w.id));
 
   return (
     <>
       <PageHeader
         title="Program builder"
-        subtitle="Design multi-week training programs day by day"
+        subtitle="Build phase-based programs — pick a phase, then add the workouts it delivers"
         action={
-          <button type="submit" form="pb-form" className="btn-primary">
-            <CheckCircle2 className="h-4 w-4" />
-            Save program
+          <button className="btn-primary" onClick={() => setNewProgramOpen(true)}>
+            <Plus className="h-4 w-4" /> New program
           </button>
         }
       />
 
-      {saved && (
-        <div className="mb-5 flex items-center gap-3 rounded-xl border border-accent-500/30 bg-accent-500/15 px-4 py-3 text-sm text-accent-400">
-          <CheckCircle2 className="h-5 w-5 shrink-0" />
-          <span className="font-medium text-ink-900">
-            “{meta.name.trim() || "Untitled Program"}” saved
-          </span>
-          <span className="text-accent-400">It now appears in your programs list below.</span>
-        </div>
-      )}
-
-      <div className="grid gap-5 lg:grid-cols-[20rem_1fr]">
-        {/* Left: meta form */}
-        <form id="pb-form" onSubmit={saveProgram} className="card h-fit space-y-4 p-5">
-          <p className="eyebrow">Program details</p>
-
-          <label className="block">
-            <span className="label">Program name</span>
-            <input
-              className="input"
-              value={meta.name}
-              onChange={(e) => { setMeta((m) => ({ ...m, name: e.target.value })); setSaved(false); }}
-              placeholder="Strength Foundations"
-              required
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="label">Weeks</span>
-              <div className="relative">
-                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-                <input
-                  type="number"
-                  min={1}
-                  max={16}
-                  className="input pl-9"
-                  value={meta.weeks}
-                  onChange={(e) => { setMeta((m) => ({ ...m, weeks: Number(e.target.value) })); setSaved(false); }}
-                />
-              </div>
-            </label>
-            <label className="block">
-              <span className="label">Days / week</span>
-              <div className="relative">
-                <Layers className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-                <input
-                  type="number"
-                  min={1}
-                  max={7}
-                  className="input pl-9"
-                  value={meta.workoutsPerWeek}
-                  onChange={(e) => { setMeta((m) => ({ ...m, workoutsPerWeek: Number(e.target.value) })); setSaved(false); }}
-                />
-              </div>
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="label">Focus</span>
-            <div className="relative">
-              <Target className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-              <select
-                className="input pl-9"
-                value={meta.focus}
-                onChange={(e) => { setMeta((m) => ({ ...m, focus: e.target.value })); setSaved(false); }}
-              >
-                {["Strength", "Hypertrophy", "Fat loss", "Endurance", "Mobility", "General"].map((f) => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </div>
-          </label>
-
-          <div className="block">
-            <span className="label flex items-center gap-1.5">
-              <Palette className="h-3.5 w-3.5" /> Cover color
-            </span>
-            <div className="mt-1 grid grid-cols-3 gap-2">
-              {colorOptions.map((c) => (
+      <div className="grid gap-5 lg:grid-cols-[18rem_1fr]">
+        {/* Left: program list */}
+        <div className="card h-fit p-3">
+          <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
+            Programs ({app.programs.length})
+          </p>
+          {app.programs.length === 0 ? (
+            <p className="px-2 py-4 text-sm text-ink-400">No programs yet. Create one to start.</p>
+          ) : (
+            <div className="space-y-1">
+              {app.programs.map((p) => (
                 <button
-                  key={c.value}
-                  type="button"
-                  onClick={() => { setMeta((m) => ({ ...m, color: c.value })); setSaved(false); }}
+                  key={p.id}
+                  onClick={() => { setSelectedId(p.id); setActivePhaseId(p.phases?.[0]?.id ?? null); }}
                   className={cn(
-                    "h-9 rounded-lg bg-gradient-to-br ring-2 transition",
-                    c.swatch,
-                    meta.color === c.value ? "ring-ink-900" : "ring-transparent hover:ring-ink-300",
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition",
+                    p.id === selectedId ? "bg-brand-500/15 text-brand-500" : "text-ink-700 hover:bg-ink-50",
                   )}
-                  aria-label={c.label}
-                />
+                >
+                  <span className={cn("h-8 w-8 shrink-0 rounded-lg bg-gradient-to-br", p.color)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-ink-900">{p.name}</span>
+                    <span className="block text-xs text-ink-400">
+                      {(p.phases?.length ?? 1)} phase{(p.phases?.length ?? 1) === 1 ? "" : "s"} · {p.workoutIds?.length ?? 0} workouts
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
+                </button>
               ))}
             </div>
-          </div>
-
-          <div className={cn("flex h-20 flex-col justify-end rounded-xl bg-gradient-to-br p-3 shadow-soft", meta.color)}>
-            <p className="text-sm font-semibold text-white">{meta.name.trim() || "Program preview"}</p>
-            <p className="text-xs text-white/80">{weeks} wk · {meta.focus} · {totalAssigned} workouts placed</p>
-          </div>
-        </form>
-
-        {/* Center: week/day grid */}
-        <div className="card p-5">
-          {app.workouts.length === 0 ? (
-            <EmptyState
-              icon={Dumbbell}
-              title="No workouts to assign"
-              description="Create workouts in the Training section first, then come back to drop them into your program schedule."
-            />
-          ) : (
-            <>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-ink-900">Schedule</p>
-                  <span className="badge bg-ink-100 text-ink-500">{totalAssigned} placed</span>
-                </div>
-                <div className="scroll-thin flex max-w-full gap-1.5 overflow-x-auto">
-                  {Array.from({ length: weeks }).map((_, w) => (
-                    <button
-                      key={w}
-                      type="button"
-                      onClick={() => setActiveWeek(w)}
-                      className={cn(
-                        "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition",
-                        activeWeek === w
-                          ? "bg-brand-600 text-white shadow-glow"
-                          : "border border-ink-200 bg-ink-100 text-ink-600 hover:border-ink-300 hover:bg-ink-50",
-                      )}
-                    >
-                      Week {w + 1}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {DAY_NAMES.map((dn, d) => {
-                  const key = dayKey(activeWeek, d);
-                  const assigned = assignments[key] ?? [];
-                  return (
-                    <div key={key} className="rounded-xl border border-ink-100 bg-ink-50/60 p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-semibold text-ink-900">{dn}</span>
-                        <span className="text-xs text-ink-400">{assigned.length}</span>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        {assigned.map((wid) => {
-                          const w = workoutById[wid];
-                          if (!w) return null;
-                          return (
-                            <div
-                              key={wid}
-                              className="flex items-center gap-1.5 rounded-lg bg-brand-500/15 px-2 py-1.5 text-xs text-brand-400"
-                            >
-                              <Dumbbell className="h-3 w-3 shrink-0" />
-                              <span className="min-w-0 flex-1 truncate font-medium text-ink-900">{w.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => removeWorkout(key, wid)}
-                                className="shrink-0 rounded p-0.5 text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
-                                aria-label="Remove workout"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {assigned.length === 0 && (
-                          <p className="py-1 text-xs text-ink-400">Rest / empty</p>
-                        )}
-                      </div>
-
-                      <div className="mt-2 flex gap-1.5">
-                        <select
-                          className="input h-8 py-0 text-xs"
-                          value={picks[key] ?? ""}
-                          onChange={(e) => setPicks((p) => ({ ...p, [key]: e.target.value }))}
-                        >
-                          <option value="">Add workout…</option>
-                          {app.workouts.map((w) => (
-                            <option key={w.id} value={w.id}>{w.name}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => addWorkout(key)}
-                          disabled={!picks[key]}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-40"
-                          aria-label="Add"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
           )}
         </div>
-      </div>
 
-      {/* Existing programs */}
-      <div className="mt-8">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-400">
-          Existing programs ({app.programs.length})
-        </h2>
-        {app.programs.length === 0 ? (
-          <p className="text-sm text-ink-500">No programs yet — build and save your first one above.</p>
+        {/* Right: phase editor */}
+        {!program ? (
+          <div className="card">
+            <EmptyState
+              icon={Layers}
+              title="Select a program"
+              description="Pick a program on the left to edit its phases and workouts, or create a new one."
+            />
+          </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {app.programs.map((p) => (
-              <div key={p.id} className="card overflow-hidden p-0">
-                <div className={cn("h-20 bg-gradient-to-br", p.color)} />
-                <div className="p-4">
-                  <p className="font-semibold text-ink-900">{p.name}</p>
-                  <p className="mt-0.5 text-xs text-ink-500">{p.focus}</p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    <span className="badge bg-ink-100 text-ink-600">{p.weeks} weeks</span>
-                    <span className="badge bg-ink-100 text-ink-600">{p.workoutsPerWeek}×/week</span>
-                    <span className="badge bg-accent-500/15 text-accent-400">{p.workoutIds?.length ?? 0} workouts</span>
+          <div className="space-y-5">
+            {/* Program header */}
+            <div className="card p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className={cn("h-10 w-10 rounded-xl bg-gradient-to-br", program.color)} />
+                  <div>
+                    <h2 className="font-bold text-ink-900">{program.name}</h2>
+                    <p className="text-xs text-ink-500">{program.focus} · {program.workoutIds?.length ?? 0} workouts total</p>
                   </div>
                 </div>
+                <Link href="/dashboard/workouts" className="btn-secondary text-sm">
+                  <SlidersHorizontal className="h-4 w-4" /> Edit details & media
+                </Link>
               </div>
-            ))}
+
+              {/* Phase selector (the dropdown of phases) */}
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ink-400">Phase</span>
+                <select
+                  className="input h-9 max-w-xs py-0 text-sm"
+                  value={activePhase?.id ?? ""}
+                  onChange={(e) => setActivePhaseId(e.target.value)}
+                >
+                  {phases.map((ph) => (
+                    <option key={ph.id} value={ph.id}>{ph.name} ({ph.weeks} wk · {ph.workoutIds.length} workouts)</option>
+                  ))}
+                </select>
+                <button onClick={addPhase} className="btn-secondary h-9 py-0 text-sm">
+                  <Plus className="h-3.5 w-3.5" /> Add phase
+                </button>
+              </div>
+            </div>
+
+            {/* Active phase editor */}
+            {activePhase && (
+              <div className="card p-5">
+                <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-ink-100 pb-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <Field label="Phase name">
+                      <input
+                        className="input h-9 py-0"
+                        value={activePhase.name}
+                        onChange={(e) => renamePhase(activePhase.id, e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Weeks">
+                      <input
+                        type="number"
+                        min={1}
+                        max={16}
+                        className="input h-9 w-20 py-0"
+                        value={activePhase.weeks}
+                        onChange={(e) => setPhaseWeeks(activePhase.id, Number(e.target.value) || 1)}
+                      />
+                    </Field>
+                  </div>
+                  {phases.length > 1 && (
+                    <button
+                      onClick={() => removePhase(activePhase.id)}
+                      className="btn-secondary h-9 py-0 text-sm text-rose-400 hover:bg-rose-500/15"
+                    >
+                      <Trash2 className="h-4 w-4" /> Delete phase
+                    </button>
+                  )}
+                </div>
+
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-ink-900">Workouts in {activePhase.name}</h3>
+                  <button onClick={() => setAddWorkoutOpen(true)} className="btn-primary px-3 py-1.5 text-sm">
+                    <Plus className="h-4 w-4" /> Add workout
+                  </button>
+                </div>
+
+                {phaseWorkouts.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-6 text-center text-sm text-ink-400">
+                    No workouts in this phase yet. Add one from your library or create a new one.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {phaseWorkouts.map((w, i) => (
+                      <div key={w.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-xs font-bold text-brand-400">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-ink-900">{w.name}</div>
+                          <div className="text-xs text-ink-400">
+                            {w.durationMin} min · {w.exercises.length} exercises
+                          </div>
+                        </div>
+                        <Link
+                          href={`/dashboard/workouts?select=${w.id}`}
+                          className="btn-secondary px-2.5 py-1.5 text-xs"
+                          title="Build warm-ups, exercises & rest times"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Build
+                        </Link>
+                        <div className="flex items-center">
+                          <button onClick={() => moveWorkout(i, -1)} disabled={i === 0} className="rounded p-1 text-ink-400 hover:bg-ink-100 disabled:opacity-30" aria-label="Move up"><ArrowUp className="h-4 w-4" /></button>
+                          <button onClick={() => moveWorkout(i, 1)} disabled={i === phaseWorkouts.length - 1} className="rounded p-1 text-ink-400 hover:bg-ink-100 disabled:opacity-30" aria-label="Move down"><ArrowDown className="h-4 w-4" /></button>
+                          <button onClick={() => removeWorkoutFromPhase(w.id)} className="rounded p-1 text-ink-400 hover:bg-rose-500/15 hover:text-rose-400" aria-label="Remove"><X className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* New program modal */}
+      <Modal
+        open={newProgramOpen}
+        onClose={() => setNewProgramOpen(false)}
+        title="New program"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setNewProgramOpen(false)}>Cancel</button>
+            <button className="btn-primary" onClick={createProgram} disabled={!newProgramName.trim()}>Create</button>
+          </>
+        }
+      >
+        <Field label="Program name">
+          <input
+            autoFocus
+            className="input"
+            value={newProgramName}
+            onChange={(e) => setNewProgramName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") createProgram(); }}
+            placeholder="e.g. 8-Week Strength Foundations"
+          />
+        </Field>
+        <p className="mt-2 text-xs text-ink-400">Starts with one phase — add more phases after creating.</p>
+      </Modal>
+
+      {/* Add workout to phase modal */}
+      <Modal
+        open={addWorkoutOpen}
+        onClose={() => setAddWorkoutOpen(false)}
+        title={`Add workout to ${activePhase?.name ?? "phase"}`}
+        footer={<button className="btn-secondary" onClick={() => setAddWorkoutOpen(false)}>Done</button>}
+      >
+        <div className="space-y-4">
+          <div>
+            <span className="label">Create a new workout</span>
+            <div className="mt-1 flex gap-2">
+              <input
+                className="input flex-1"
+                value={quickWorkoutName}
+                onChange={(e) => setQuickWorkoutName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") quickCreateWorkout(); }}
+                placeholder="e.g. Day 1 — Upper Body"
+              />
+              <button className="btn-primary shrink-0" onClick={quickCreateWorkout} disabled={!quickWorkoutName.trim()}>
+                <Plus className="h-4 w-4" /> Create
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-ink-400">Creates a blank workout in this phase — then tap “Build” to add warm-ups, exercises and rest times.</p>
+          </div>
+
+          <div>
+            <span className="label">Or add from your library</span>
+            {available.length === 0 ? (
+              <p className="mt-1 rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-4 text-center text-sm text-ink-400">
+                Every workout is already in this phase.
+              </p>
+            ) : (
+              <div className="mt-1 max-h-64 space-y-1.5 overflow-y-auto scroll-thin">
+                {available.map((w) => (
+                  <button
+                    key={w.id}
+                    onClick={() => addWorkoutToPhase(w.id)}
+                    className="flex w-full items-center gap-3 rounded-xl border border-ink-100 p-2.5 text-left transition hover:border-brand-300 hover:bg-brand-500/5"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
+                      <Dumbbell className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-ink-900">{w.name}</span>
+                      <span className="block text-xs text-ink-400">{w.exercises.length} exercises</span>
+                    </span>
+                    <Plus className="h-4 w-4 text-brand-400" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }

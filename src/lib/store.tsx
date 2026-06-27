@@ -477,20 +477,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDb((d) => ({ ...d, workouts: d.workouts.filter((w) => w.id !== id) })), []);
 
   /* ----- programs ----- */
+  // Keep the flattened workoutIds in sync with the phase structure so program
+  // assignment (which reads workoutIds) always matches what the phases contain.
+  const withFlatWorkouts = (p: Program): Program =>
+    p.phases && p.phases.length
+      ? { ...p, workoutIds: Array.from(new Set(p.phases.flatMap((ph) => ph.workoutIds))) }
+      : p;
+
   const addProgram = useCallback((p: Partial<Program>): Program => {
-    const program: Program = {
+    const program: Program = withFlatWorkouts({
       id: uid("p"), name: p.name ?? "New Program", weeks: p.weeks ?? 8,
       workoutsPerWeek: p.workoutsPerWeek ?? 3, focus: p.focus ?? "General",
       clientsAssigned: p.clientsAssigned ?? 0, color: p.color ?? "from-brand-500 to-brand-700",
       workoutIds: p.workoutIds ?? [],
-    };
+      ...(p.phases ? { phases: p.phases } : {}),
+      ...(p.instructions ? { instructions: p.instructions } : {}),
+      ...(p.media ? { media: p.media } : {}),
+    });
     setDb((d) => ({ ...d, programs: [program, ...d.programs] }));
     return program;
   }, []);
   const updateProgram = useCallback((id: string, patch: Partial<Program>) =>
     setDb((d) => ({
       ...d,
-      programs: d.programs.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+      programs: d.programs.map((p) => (p.id === id ? withFlatWorkouts({ ...p, ...patch }) : p)),
     })), []);
   const removeProgram = useCallback((id: string) =>
     setDb((d) => ({ ...d, programs: d.programs.filter((p) => p.id !== id) })), []);

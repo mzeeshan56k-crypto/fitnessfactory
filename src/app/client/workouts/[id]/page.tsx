@@ -234,9 +234,19 @@ function WorkoutPlayer({ workout, clientId }: { workout: import("@/lib/data").Wo
                     </span>
                     <h2 className="font-semibold text-ink-900">{ex.name}</h2>
                   </div>
-                  <span className="badge mt-1.5 bg-brand-500/15 text-brand-400">
-                    {ex.muscle}
-                  </span>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {ex.section && ex.section !== "main" && (
+                      <span className={cn(
+                        "badge",
+                        ex.section === "warmup" ? "bg-amber-500/15 text-amber-500" : "bg-sky-500/15 text-sky-500",
+                      )}>
+                        {ex.section === "warmup" ? "Warm-up" : "Cool-down"}
+                      </span>
+                    )}
+                    <span className="badge bg-brand-500/15 text-brand-400">
+                      {ex.muscle}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {exDone && (
