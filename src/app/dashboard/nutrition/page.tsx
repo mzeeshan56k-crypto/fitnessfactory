@@ -56,8 +56,11 @@ export default function NutritionPage() {
     );
   }
 
+  // The library shows reusable templates only. Client-specific plans (prescribed
+  // from a client's profile) live on that client and don't clutter the library.
+  const library = app.mealPlans.filter((m) => !m.clientId);
   const selected: MealPlan | null =
-    app.mealPlans.find((m) => m.id === selectedId) ?? app.mealPlans[0] ?? null;
+    library.find((m) => m.id === selectedId) ?? library[0] ?? null;
 
   const macroKcal = {
     protein: (selected?.protein ?? 0) * 4,
@@ -161,7 +164,7 @@ export default function NutritionPage() {
         <StatCard label="Fat (g)" value={`${selected?.fat ?? 0} g`} icon={Droplet} />
       </div>
 
-      {app.mealPlans.length === 0 ? (
+      {library.length === 0 ? (
         <div className="mt-6">
           <EmptyState
             icon={Utensils}
@@ -179,7 +182,7 @@ export default function NutritionPage() {
         <div className="mt-6 space-y-6">
           {/* Trainerize-style meal/recipe cards */}
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {app.mealPlans.map((m) => {
+            {library.map((m) => {
               const active = selected?.id === m.id;
               const cover = m.meals.find((meal) => meal.photo)?.photo
                 ?? m.media?.find((md) => md.type === "image")?.url;

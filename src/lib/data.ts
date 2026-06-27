@@ -122,6 +122,9 @@ export interface MealPlan {
   meals: Meal[];
   tag: string;
   media?: TrainingMedia[]; // plan-level recipe pictures / PDFs shown to the client
+  // When set, this plan is prescribed to one specific client and is hidden from
+  // the shared template library (edits don't affect anyone else).
+  clientId?: string;
 }
 
 export interface Message {

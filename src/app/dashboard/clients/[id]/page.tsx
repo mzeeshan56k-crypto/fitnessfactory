@@ -48,7 +48,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     workouts: libWorkouts, programs, mealPlans, forms, clientPlans, completions, photos,
     weightLogs, checkins, nutritionLogs, session, assignCoach,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
-    addMealPlan,
+    addMealPlan, updateMealPlan,
   } = useApp();
   const [coaches, setCoaches] = useState<{ email: string; name: string; role: string }[]>([]);
   const router = useRouter();
@@ -58,8 +58,9 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Create/upload a meal plan straight from the client profile.
+  // Create / edit a client-specific meal plan straight from the client profile.
   const [mealOpen, setMealOpen] = useState(false);
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [mealForm, setMealForm] = useState({ name: "", calories: "2000", protein: "150", carbs: "200", fat: "60" });
   const [mealMedia, setMealMedia] = useState<TrainingMedia[]>([]);
   const [mealRows, setMealRows] = useState<{ name: string; kcal: string; items: string }[]>([{ name: "", kcal: "", items: "" }]);
@@ -317,7 +318,39 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setDraft("");
   }
 
-  // Create a meal plan (built meals and/or an uploaded PDF/photo) and prescribe it.
+  // Open the modal to create a brand-new client-specific plan.
+  function openCreateMeal() {
+    setEditingMealId(null);
+    setMealForm({ name: "", calories: "2000", protein: "150", carbs: "200", fat: "60" });
+    setMealMedia([]);
+    setMealRows([{ name: "", kcal: "", items: "" }]);
+    setMealOpen(true);
+  }
+
+  // Open the modal to edit/customise the currently-prescribed plan for THIS
+  // client. A shared template is cloned into a client-specific copy on save so
+  // edits never affect other clients.
+  function openEditMeal() {
+    if (!c) return;
+    const current = mealPlans.find((m) => m.id === clientPlans[c.id]?.mealPlanId);
+    if (!current) { openCreateMeal(); return; }
+    // Editing in place only when it's already this client's own plan.
+    setEditingMealId(current.clientId === c.id ? current.id : null);
+    setMealForm({
+      name: current.clientId === c.id ? current.name : `${current.name} — ${c.name.split(" ")[0]}`,
+      calories: String(current.calories), protein: String(current.protein),
+      carbs: String(current.carbs), fat: String(current.fat),
+    });
+    setMealMedia(current.media ?? []);
+    setMealRows(
+      current.meals.length
+        ? current.meals.map((m) => ({ name: m.name, kcal: String(m.kcal), items: m.items.join(", ") }))
+        : [{ name: "", kcal: "", items: "" }],
+    );
+    setMealOpen(true);
+  }
+
+  // Create or update a client-specific meal plan and prescribe it.
   function submitMealPlan() {
     if (!c) return;
     const name = mealForm.name.trim();
@@ -329,7 +362,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         kcal: Number(r.kcal) || 0,
         items: r.items.split(",").map((i) => i.trim()).filter(Boolean),
       }));
-    const m = addMealPlan({
+    const payload = {
       name,
       calories: Number(mealForm.calories) || 0,
       protein: Number(mealForm.protein) || 0,
@@ -338,8 +371,15 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       tag: "Custom",
       meals,
       media: mealMedia.length ? mealMedia : undefined,
-    });
-    setClientMealPlan(c.id, m.id);
+      clientId: c.id, // always client-specific
+    };
+    if (editingMealId) {
+      updateMealPlan(editingMealId, payload);
+      setClientMealPlan(c.id, editingMealId);
+    } else {
+      const m = addMealPlan(payload);
+      setClientMealPlan(c.id, m.id);
+    }
     setMealOpen(false);
   }
 
@@ -578,23 +618,54 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     <Apple className="h-5 w-5 text-accent-400" />
                     <h2 className="font-semibold text-ink-900">Nutrition plan</h2>
                   </div>
-                  <button className="btn-secondary px-2.5 py-1.5 text-xs" onClick={() => { setMealForm({ name: "", calories: "2000", protein: "150", carbs: "200", fat: "60" }); setMealMedia([]); setMealRows([{ name: "", kcal: "", items: "" }]); setMealOpen(true); }}>
-                    <Plus className="h-3.5 w-3.5" /> Create / upload
+                  <button className="btn-secondary px-2.5 py-1.5 text-xs" onClick={openCreateMeal}>
+                    <Plus className="h-3.5 w-3.5" /> New for {c.name.split(" ")[0]}
                   </button>
                 </div>
-                <p className="mt-1 text-sm text-ink-500">Assign a meal plan this client will see.</p>
+                <p className="mt-1 text-sm text-ink-500">Prescribe a plan {c.name.split(" ")[0]} will see — a shared template or one built just for them.</p>
                 <select
                   className="input mt-4"
                   value={plan.mealPlanId ?? ""}
                   onChange={(e) => setClientMealPlan(c.id, e.target.value)}
                 >
                   <option value="">Unassigned</option>
-                  {mealPlans.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
+                  {(() => {
+                    const own = mealPlans.filter((m) => m.clientId === c.id);
+                    const templates = mealPlans.filter((m) => !m.clientId);
+                    return (
+                      <>
+                        {own.length > 0 && (
+                          <optgroup label={`${c.name.split(" ")[0]}'s plans`}>
+                            {own.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </optgroup>
+                        )}
+                        <optgroup label="Templates">
+                          {templates.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </optgroup>
+                      </>
+                    );
+                  })()}
                 </select>
+                {(() => {
+                  const current = mealPlans.find((m) => m.id === plan.mealPlanId);
+                  if (!current) return null;
+                  return (
+                    <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-ink-100 bg-ink-50/40 p-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-ink-900">{current.name}</div>
+                        <div className="text-xs text-ink-400">
+                          {current.calories.toLocaleString()} kcal · {current.meals.length} meal{current.meals.length === 1 ? "" : "s"}
+                          {current.clientId === c.id ? " · client-specific" : " · template"}
+                        </div>
+                      </div>
+                      <button className="btn-secondary shrink-0 px-2.5 py-1.5 text-xs" onClick={openEditMeal}>
+                        <Pencil className="h-3.5 w-3.5" /> {current.clientId === c.id ? "Edit" : "Customize"}
+                      </button>
+                    </div>
+                  );
+                })()}
                 <p className="mt-2 text-xs text-ink-400">
-                  Build full meal plans with recipes & PDFs in <Link href="/dashboard/nutrition" className="text-brand-400">Nutrition</Link>.
+                  Reusable templates live in <Link href="/dashboard/nutrition" className="text-brand-400">Nutrition</Link>; plans you build here are saved just for {c.name.split(" ")[0]}.
                 </p>
               </div>
             </div>
@@ -1146,13 +1217,13 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       <Modal
         open={mealOpen}
         onClose={() => setMealOpen(false)}
-        title={`New nutrition plan for ${c.name.split(" ")[0]}`}
+        title={`${editingMealId ? "Edit" : "New"} nutrition plan for ${c.name.split(" ")[0]}`}
         size="lg"
         footer={
           <>
             <button className="btn-secondary" onClick={() => setMealOpen(false)}>Cancel</button>
             <button className="btn-primary" onClick={submitMealPlan} disabled={!mealForm.name.trim()}>
-              Create & prescribe
+              {editingMealId ? "Save changes" : "Create & prescribe"}
             </button>
           </>
         }

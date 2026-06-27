@@ -43,6 +43,9 @@ function scopeForMember(ws: Workspace, user: { email: string; clientId?: string 
     // coach has published for booking.
     appointments: (ws.appointments ?? []).filter((a) => a.clientId === myId || !a.clientId),
     checkins: (ws.checkins ?? []).filter((c) => c.clientId === myId),
+    // Shared templates + this member's own client-specific plans only.
+    mealPlans: ((ws.mealPlans as Array<{ clientId?: string }> | undefined) ?? [])
+      .filter((m) => !m.clientId || m.clientId === myId),
     users: [],
     broadcasts: [],
     aiSuggestions: [],

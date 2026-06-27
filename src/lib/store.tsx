@@ -457,6 +457,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         conversations: d.conversations.filter((c) => c.clientId !== id),
         checkins: d.checkins.filter((c) => c.clientId !== id),
         appointments: d.appointments.filter((a) => a.clientId !== id),
+        // Drop meal plans that were built specifically for this client.
+        mealPlans: d.mealPlans.filter((m) => m.clientId !== id),
         completions: without(d.completions),
         photos: without(d.photos),
         weightLogs: without(d.weightLogs),
@@ -538,6 +540,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       protein: m.protein ?? 150, carbs: m.carbs ?? 200, fat: m.fat ?? 60,
       meals: m.meals ?? [], tag: m.tag ?? "Custom",
       ...(m.media ? { media: m.media } : {}),
+      ...(m.clientId ? { clientId: m.clientId } : {}),
     };
     setDb((d) => ({ ...d, mealPlans: [plan, ...d.mealPlans] }));
     return plan;
