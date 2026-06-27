@@ -62,6 +62,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [mealOpen, setMealOpen] = useState(false);
   const [mealForm, setMealForm] = useState({ name: "", calories: "2000", protein: "150", carbs: "200", fat: "60" });
   const [mealMedia, setMealMedia] = useState<TrainingMedia[]>([]);
+  const [mealRows, setMealRows] = useState<{ name: string; kcal: string; items: string }[]>([{ name: "", kcal: "", items: "" }]);
 
   const [edit, setEdit] = useState({
     name: "",
@@ -316,11 +317,18 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setDraft("");
   }
 
-  // Create a meal plan (optionally just an uploaded PDF/photo) and prescribe it.
+  // Create a meal plan (built meals and/or an uploaded PDF/photo) and prescribe it.
   function submitMealPlan() {
     if (!c) return;
     const name = mealForm.name.trim();
     if (!name) return;
+    const meals = mealRows
+      .filter((r) => r.name.trim())
+      .map((r) => ({
+        name: r.name.trim(),
+        kcal: Number(r.kcal) || 0,
+        items: r.items.split(",").map((i) => i.trim()).filter(Boolean),
+      }));
     const m = addMealPlan({
       name,
       calories: Number(mealForm.calories) || 0,
@@ -328,7 +336,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       carbs: Number(mealForm.carbs) || 0,
       fat: Number(mealForm.fat) || 0,
       tag: "Custom",
-      meals: [],
+      meals,
       media: mealMedia.length ? mealMedia : undefined,
     });
     setClientMealPlan(c.id, m.id);
@@ -546,6 +554,17 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
+                {(() => {
+                  const prog = plan.programId ? programs.find((p) => p.id === plan.programId) : null;
+                  if (!prog) return null;
+                  const n = prog.workoutIds?.length ?? 0;
+                  return (
+                    <p className="mt-2 text-xs text-ink-500">
+                      <span className="font-medium text-ink-700">{prog.name}</span> delivers {n} workout{n === 1 ? "" : "s"} ·
+                      {" "}{prog.weeks} wk · {prog.workoutsPerWeek}×/wk. These are added below automatically and update if you switch programs — you can still add or remove individual workouts.
+                    </p>
+                  );
+                })()}
                 {programs.length === 0 && (
                   <p className="mt-2 text-xs text-ink-400">
                     No programs yet — create them in <Link href="/dashboard/program-builder" className="text-brand-400">Program Builder</Link> or load starter content.
@@ -559,7 +578,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     <Apple className="h-5 w-5 text-accent-400" />
                     <h2 className="font-semibold text-ink-900">Nutrition plan</h2>
                   </div>
-                  <button className="btn-secondary px-2.5 py-1.5 text-xs" onClick={() => { setMealForm({ name: "", calories: "2000", protein: "150", carbs: "200", fat: "60" }); setMealMedia([]); setMealOpen(true); }}>
+                  <button className="btn-secondary px-2.5 py-1.5 text-xs" onClick={() => { setMealForm({ name: "", calories: "2000", protein: "150", carbs: "200", fat: "60" }); setMealMedia([]); setMealRows([{ name: "", kcal: "", items: "" }]); setMealOpen(true); }}>
                     <Plus className="h-3.5 w-3.5" /> Create / upload
                   </button>
                 </div>
@@ -1148,11 +1167,62 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             <Field label="Carbs (g)"><input type="number" className="input" value={mealForm.carbs} onChange={(e) => setMealForm((f) => ({ ...f, carbs: e.target.value }))} /></Field>
             <Field label="Fat (g)"><input type="number" className="input" value={mealForm.fat} onChange={(e) => setMealForm((f) => ({ ...f, fat: e.target.value }))} /></Field>
           </div>
-          <Field label="Upload a plan (PDF) or recipe pictures">
+          {/* Meals builder */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="label mb-0">Meals (optional)</span>
+              <button
+                type="button"
+                className="btn-secondary px-2.5 py-1 text-xs"
+                onClick={() => setMealRows((rows) => [...rows, { name: "", kcal: "", items: "" }])}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add meal
+              </button>
+            </div>
+            <div className="space-y-2">
+              {mealRows.map((row, i) => (
+                <div key={i} className="rounded-xl border border-ink-100 p-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="input flex-1"
+                      value={row.name}
+                      onChange={(e) => setMealRows((rows) => rows.map((r, x) => (x === i ? { ...r, name: e.target.value } : r)))}
+                      placeholder="Meal name (e.g. Breakfast)"
+                    />
+                    <input
+                      type="number"
+                      className="input w-24"
+                      value={row.kcal}
+                      onChange={(e) => setMealRows((rows) => rows.map((r, x) => (x === i ? { ...r, kcal: e.target.value } : r)))}
+                      placeholder="kcal"
+                    />
+                    {mealRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setMealRows((rows) => rows.filter((_, x) => x !== i))}
+                        aria-label="Remove meal"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 hover:bg-rose-500/15 hover:text-rose-400"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    className="input mt-2"
+                    value={row.items}
+                    onChange={(e) => setMealRows((rows) => rows.map((r, x) => (x === i ? { ...r, items: e.target.value } : r)))}
+                    placeholder="Items, comma separated (e.g. Oats, Eggs, Banana)"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Field label="Or upload a plan (PDF) / recipe pictures">
             <MediaEditor media={mealMedia} onChange={setMealMedia} />
           </Field>
           <p className="text-xs text-ink-400">
-            Tip: you can just upload a PDF here and skip the macros — it&apos;ll be prescribed and visible to {c.name.split(" ")[0]} right away.
+            Build meals above, or just upload a PDF and skip the rest — it&apos;ll be prescribed and visible to {c.name.split(" ")[0]} right away.
           </p>
         </div>
       </Modal>
