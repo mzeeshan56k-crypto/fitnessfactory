@@ -66,7 +66,35 @@ export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
-  const raw = (await kvGet<Workspace>(WORKSPACE_KEY)) ?? null;
+  let raw = (await kvGet<Workspace>(WORKSPACE_KEY)) ?? null;
+
+  // Self-heal: a signed-in member with no linked client record (invited before
+  // the trainer's save landed) gets one created from their account, persisted so
+  // they immediately appear under the trainer's Clients and can be assigned to.
+  if (user.role === "member") {
+    const ws = (raw ?? {}) as Workspace & { clients?: Array<Record<string, unknown>> };
+    const clients = ws.clients ?? [];
+    const linked = clients.some(
+      (c) => (user.clientId && c.id === user.clientId) ||
+        String(c.email ?? "").toLowerCase() === user.email.toLowerCase(),
+    );
+    if (!linked) {
+      const name = user.name || user.email;
+      const created = {
+        id: user.clientId || `c_${Math.random().toString(36).slice(2, 9)}`,
+        name, email: user.email,
+        avatar: name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase(),
+        status: "active", program: "Unassigned", goal: "General fitness",
+        progress: 0, lastActive: "Just now", startWeight: 0, currentWeight: 0,
+        goalWeight: 0, adherence: 0, joinedAt: new Date().toISOString().slice(0, 10),
+        phone: "", tags: [],
+      };
+      ws.clients = [created, ...clients];
+      await kvSet(WORKSPACE_KEY, ws);
+      raw = ws as Workspace;
+    }
+  }
+
   const workspace = raw && user.role === "member" ? scopeForMember(raw, user) : raw;
   return NextResponse.json({ workspace, session: user });
 }
