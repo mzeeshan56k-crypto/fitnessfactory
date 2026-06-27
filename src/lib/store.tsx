@@ -249,20 +249,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     sessionRef.current = session;
   }, [session]);
 
-  // Pull the latest workspace from the server, without clobbering unsaved
-  // local edits (so coach/member see each other's updates live).
+  // Pull the latest workspace from the server. Coach/member see each other's
+  // updates live. When the trainer has unsaved local edits we don't replace the
+  // whole document (that would lose the edit), but we DO merge in the
+  // collections members write — completions, check-ins, weigh-ins, photos,
+  // nutrition, messages — so client progress and the activity feed keep
+  // updating in real time even mid-edit.
+  // Collections members write that the trainer only reads — safe to fold in
+  // live without risking the trainer's own unsaved edits.
+  const MEMBER_COLLECTIONS = [
+    "completions", "checkins", "weightLogs", "photos", "nutritionLogs",
+  ] as const;
   const refresh = useCallback(async () => {
     const sess = sessionRef.current;
     if (!loaded.current || !sess) return;
-    // Staff bulk-save: skip if there are pending unsaved local changes.
-    if (sess.role !== "member" && JSON.stringify(dbRef.current) !== lastSaved.current) return;
     // Members: don't clobber optimistic state while a write is in flight.
     if (sess.role === "member" && pendingWrites.current > 0) return;
+
+    const staffDirty =
+      sess.role !== "member" && JSON.stringify(dbRef.current) !== lastSaved.current;
     try {
       const res = await fetch("/api/workspace");
       if (!res.ok) return;
       const data = await res.json();
       const merged: DB = data.workspace ? { ...emptyDB, ...data.workspace } : emptyDB;
+
+      if (staffDirty) {
+        // Keep the trainer's unsaved edits, but fold in fresh member activity.
+        const cur = dbRef.current;
+        const patch: Partial<DB> = {};
+        let changed = false;
+        for (const key of MEMBER_COLLECTIONS) {
+          if (JSON.stringify(merged[key]) !== JSON.stringify(cur[key])) {
+            (patch as Record<string, unknown>)[key] = merged[key];
+            changed = true;
+          }
+        }
+        if (changed) setDb((d) => ({ ...d, ...patch }));
+        return;
+      }
+
       const snapshot = JSON.stringify(merged);
       if (snapshot !== JSON.stringify(dbRef.current)) {
         setDb(merged);
