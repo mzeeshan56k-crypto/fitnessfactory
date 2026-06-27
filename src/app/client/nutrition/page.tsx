@@ -606,13 +606,17 @@ export default function ClientNutritionPage() {
               <div
                 key={meal.name}
                 className={cn(
-                  "rounded-2xl border p-4 transition",
+                  "overflow-hidden rounded-2xl border transition",
                   isLogged
                     ? "border-accent-200 bg-accent-500/15"
                     : "border-ink-100 bg-ink-100"
                 )}
               >
-                <div className="flex items-start gap-3">
+                {meal.photo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={meal.photo} alt={meal.name} className="h-40 w-full object-cover" />
+                )}
+                <div className="flex items-start gap-3 p-4">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
                     <Utensils className="h-4 w-4" />
                   </span>
@@ -631,6 +635,9 @@ export default function ClientNutritionPage() {
                         </span>
                       ))}
                     </div>
+                    {meal.recipe && (
+                      <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-ink-500">{meal.recipe}</p>
+                    )}
                   </div>
                   <button
                     type="button"

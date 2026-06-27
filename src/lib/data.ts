@@ -99,6 +99,19 @@ export interface Program {
   media?: TrainingMedia[]; // pictures / videos shown to the client
 }
 
+// A single meal / recipe within a plan. Can carry its own photo and prep notes
+// so plans look like Trainerize's recipe cards.
+export interface Meal {
+  name: string;
+  items: string[];
+  kcal: number;
+  photo?: string;        // recipe/meal image URL
+  recipe?: string;       // prep steps / notes shown to the client
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+}
+
 export interface MealPlan {
   id: string;
   name: string;
@@ -106,9 +119,9 @@ export interface MealPlan {
   protein: number;
   carbs: number;
   fat: number;
-  meals: { name: string; items: string[]; kcal: number }[];
+  meals: Meal[];
   tag: string;
-  media?: TrainingMedia[]; // recipe pictures / PDFs shown to the client
+  media?: TrainingMedia[]; // plan-level recipe pictures / PDFs shown to the client
 }
 
 export interface Message {

@@ -9,6 +9,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
 import { MediaEditor } from "@/components/MediaEditor";
 import { MediaGallery } from "@/components/MediaGallery";
+import { ImageUpload } from "@/components/ui/ImageUpload";
 import type { MealPlan, TrainingMedia } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -28,8 +29,8 @@ function planGradient(tag: string) {
   return "from-accent-500 to-emerald-600";
 }
 
-type MealRow = { name: string; kcal: string; items: string };
-const emptyMealRow = (): MealRow => ({ name: "", kcal: "", items: "" });
+type MealRow = { name: string; kcal: string; items: string; photo?: string; recipe: string };
+const emptyMealRow = (): MealRow => ({ name: "", kcal: "", items: "", photo: undefined, recipe: "" });
 
 export default function NutritionPage() {
   const app = useApp();
@@ -93,7 +94,7 @@ export default function NutritionPage() {
     setTag(m.tag);
     setMealRows(
       m.meals.length
-        ? m.meals.map((meal) => ({ name: meal.name, kcal: String(meal.kcal), items: meal.items.join(", ") }))
+        ? m.meals.map((meal) => ({ name: meal.name, kcal: String(meal.kcal), items: meal.items.join(", "), photo: meal.photo, recipe: meal.recipe ?? "" }))
         : [emptyMealRow()],
     );
     setMedia(m.media ?? []);
@@ -111,6 +112,8 @@ export default function NutritionPage() {
           .split(",")
           .map((i) => i.trim())
           .filter(Boolean),
+        ...(r.photo ? { photo: r.photo } : {}),
+        ...(r.recipe.trim() ? { recipe: r.recipe.trim() } : {}),
       }));
     const payload = {
       name: name.trim(),
@@ -178,6 +181,8 @@ export default function NutritionPage() {
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {app.mealPlans.map((m) => {
               const active = selected?.id === m.id;
+              const cover = m.meals.find((meal) => meal.photo)?.photo
+                ?? m.media?.find((md) => md.type === "image")?.url;
               return (
                 <div
                   key={m.id}
@@ -187,9 +192,13 @@ export default function NutritionPage() {
                   )}
                 >
                   <button onClick={() => setSelectedId(m.id)} className="block w-full text-left">
-                    <div className={cn("relative h-32 bg-gradient-to-br", planGradient(m.tag))}>
-                      <Utensils className="absolute bottom-3 left-4 h-12 w-12 text-white/30" />
-                      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/25 px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur">
+                    <div className={cn("relative h-32 bg-gradient-to-br", !cover && planGradient(m.tag))}>
+                      {cover && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={cover} alt={m.name} className="absolute inset-0 h-full w-full object-cover" />
+                      )}
+                      {!cover && <Utensils className="absolute bottom-3 left-4 h-12 w-12 text-white/30" />}
+                      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/40 px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur">
                         <Flame className="h-3 w-3" /> {m.calories.toLocaleString()} kcal
                       </span>
                     </div>
@@ -294,25 +303,34 @@ export default function NutritionPage() {
                     </p>
                   ) : (
                     selected.meals.map((meal, i) => (
-                      <div key={i} className="rounded-xl border border-ink-100 p-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-ink-900">{meal.name}</h3>
-                          <span className="flex items-center gap-1 text-xs font-medium text-ink-500">
-                            <Flame className="h-3.5 w-3.5" /> {meal.kcal} kcal
-                          </span>
-                        </div>
-                        {meal.items.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {meal.items.map((item, ii) => (
-                              <span
-                                key={ii}
-                                className="inline-flex items-center rounded-full border border-ink-100 bg-ink-50 px-3 py-1 text-xs text-ink-700"
-                              >
-                                {item}
-                              </span>
-                            ))}
-                          </div>
+                      <div key={i} className="overflow-hidden rounded-xl border border-ink-100">
+                        {meal.photo && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={meal.photo} alt={meal.name} className="h-36 w-full object-cover" />
                         )}
+                        <div className="p-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-ink-900">{meal.name}</h3>
+                            <span className="flex items-center gap-1 text-xs font-medium text-ink-500">
+                              <Flame className="h-3.5 w-3.5" /> {meal.kcal} kcal
+                            </span>
+                          </div>
+                          {meal.items.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {meal.items.map((item, ii) => (
+                                <span
+                                  key={ii}
+                                  className="inline-flex items-center rounded-full border border-ink-100 bg-ink-50 px-3 py-1 text-xs text-ink-700"
+                                >
+                                  {item}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {meal.recipe && (
+                            <p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-ink-500">{meal.recipe}</p>
+                          )}
+                        </div>
                       </div>
                     ))
                   )}
@@ -431,6 +449,22 @@ export default function NutritionPage() {
                     onChange={(e) => updateMealRow(i, { items: e.target.value })}
                     placeholder="Items, comma separated (e.g. Oats, Eggs, Banana)"
                   />
+                  <textarea
+                    className="input mt-2 resize-none text-sm"
+                    rows={2}
+                    value={row.recipe}
+                    onChange={(e) => updateMealRow(i, { recipe: e.target.value })}
+                    placeholder="Recipe / prep notes (optional)"
+                  />
+                  <div className="mt-2">
+                    <span className="mb-1 block text-xs font-medium text-ink-500">Meal photo (optional)</span>
+                    <ImageUpload
+                      value={row.photo}
+                      onChange={(url) => updateMealRow(i, { photo: url })}
+                      label="Add meal photo"
+                      aspect="video"
+                    />
+                  </div>
                 </div>
               ))}
             </div>
