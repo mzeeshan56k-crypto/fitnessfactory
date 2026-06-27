@@ -88,11 +88,25 @@ export async function POST(req: NextRequest) {
   }
 
   const ws = (await kvGet<Workspace>(WORKSPACE_KEY)) ?? {};
-  const mine =
+  let mine =
     (user.clientId && (ws.clients ?? []).find((c) => c.id === user.clientId)) ||
     (ws.clients ?? []).find((c) => c.email?.toLowerCase() === user.email.toLowerCase());
+  // Self-heal: a signed-in member with no linked client record (e.g. invited
+  // before the workspace save landed) gets one created from their account so
+  // they appear under the trainer's Clients and can be assigned to.
   if (!mine) {
-    return NextResponse.json({ error: "No client record is linked to your account yet." }, { status: 404 });
+    const created = {
+      id: user.clientId || `c_${Math.random().toString(36).slice(2, 9)}`,
+      name: user.name || user.email,
+      email: user.email,
+      avatar: (user.name || user.email).split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase(),
+      status: "active", program: "Unassigned", goal: "General fitness",
+      progress: 0, lastActive: "Just now", startWeight: 0, currentWeight: 0,
+      goalWeight: 0, adherence: 0, joinedAt: new Date().toISOString().slice(0, 10),
+      phone: "", tags: [],
+    } as unknown as WsClient;
+    ws.clients = [created, ...(ws.clients ?? [])];
+    mine = created;
   }
 
   if (body.kind === "message") {

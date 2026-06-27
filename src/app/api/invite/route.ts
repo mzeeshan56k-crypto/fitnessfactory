@@ -1,8 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAccount, getAccount, getSessionUser, normalizeEmail, updateAccount } from "@/lib/auth/accounts";
 import type { Role } from "@/lib/auth/session";
+import { kvGet, kvSet } from "@/lib/storage";
 
 export const runtime = "nodejs";
+
+const WORKSPACE_KEY = "ffkc:workspace";
+
+interface WsClient {
+  id: string; name: string; email: string; avatar?: string; status?: string;
+  coachEmail?: string; coachName?: string;
+  [k: string]: unknown;
+}
+interface Workspace { clients?: WsClient[]; [k: string]: unknown }
+
+function initials(name: string) {
+  return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase() || "C";
+}
+
+// Guarantee a client record exists in the shared workspace for an invited
+// member, so the client is never orphaned if the trainer's debounced save
+// hasn't landed yet. Links by id (falling back to email).
+async function ensureClientRecord(opts: {
+  clientId?: string; name: string; email: string; coachEmail?: string; coachName?: string;
+}) {
+  const ws = (await kvGet<Workspace>(WORKSPACE_KEY)) ?? {};
+  const clients = ws.clients ?? [];
+  const exists = clients.some(
+    (c) => (opts.clientId && c.id === opts.clientId) || c.email?.toLowerCase() === opts.email.toLowerCase(),
+  );
+  if (exists) return;
+  const client: WsClient = {
+    id: opts.clientId || `c_${Math.random().toString(36).slice(2, 9)}`,
+    name: opts.name, email: opts.email, avatar: initials(opts.name),
+    status: "active", program: "Unassigned", goal: "General fitness",
+    progress: 0, lastActive: "Invited", startWeight: 0, currentWeight: 0,
+    goalWeight: 0, adherence: 0, joinedAt: new Date().toISOString().slice(0, 10),
+    phone: "", tags: [],
+    ...(opts.coachEmail ? { coachEmail: opts.coachEmail, coachName: opts.coachName } : {}),
+  };
+  ws.clients = [client, ...clients];
+  await kvSet(WORKSPACE_KEY, ws);
+}
 
 interface InviteBody {
   name?: string;
@@ -71,6 +110,23 @@ export async function POST(req: NextRequest) {
     await updateAccount(email, { name, role, status: "invited", inviteToken: tkn, clientId });
   } else {
     await createAccount({ email, name, role, status: "invited", inviteToken: tkn, clientId });
+  }
+
+  // For client (member) invites, make sure a linked client record exists in the
+  // workspace so they show up under Clients and can be assigned to immediately —
+  // even if the trainer's local save hasn't been flushed yet.
+  if (role === "member") {
+    try {
+      await ensureClientRecord({
+        clientId,
+        name: body.name?.trim() || email,
+        email,
+        coachEmail: inviter.role === "coach" ? inviter.email : undefined,
+        coachName: inviter.role === "coach" ? inviter.name : undefined,
+      });
+    } catch {
+      /* non-fatal: the trainer's own save will still create it */
+    }
   }
 
   // Always build invite links against the public/production site so they work
