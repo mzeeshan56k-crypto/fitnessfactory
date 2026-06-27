@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Loader2, Dumbbell, Plus, X, Layers, ChevronRight, Trash2, Pencil,
+  Loader2, Dumbbell, Plus, X, Layers, ChevronRight, ChevronDown, Trash2,
   ArrowUp, ArrowDown, SlidersHorizontal,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { EmptyState, Modal, Field } from "@/components/ui/Modal";
+import { WorkoutBuilder, workoutSummary } from "@/components/WorkoutBuilder";
 import { useApp, uid } from "@/lib/store";
-import type { Program, ProgramPhase } from "@/lib/data";
+import type { ProgramPhase } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 function Loading() {
@@ -32,6 +33,7 @@ export default function ProgramBuilderPage() {
   const [newProgramName, setNewProgramName] = useState("");
   const [addWorkoutOpen, setAddWorkoutOpen] = useState(false);
   const [quickWorkoutName, setQuickWorkoutName] = useState("");
+  const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null);
 
   if (!app.hydrated) return <Loading />;
 
@@ -253,28 +255,37 @@ export default function ProgramBuilderPage() {
                 ) : (
                   <div className="space-y-2">
                     {phaseWorkouts.map((w, i) => (
-                      <div key={w.id} className="flex items-center gap-3 rounded-xl border border-ink-100 p-3">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-xs font-bold text-brand-400">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-ink-900">{w.name}</div>
-                          <div className="text-xs text-ink-400">
-                            {w.durationMin} min · {w.exercises.length} exercises
+                      <div key={w.id} className="overflow-hidden rounded-xl border border-ink-100">
+                        <div className="flex items-center gap-3 p-3">
+                          <button
+                            onClick={() => setExpandedWorkoutId(expandedWorkoutId === w.id ? null : w.id)}
+                            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-xs font-bold text-brand-400">
+                              {i + 1}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-ink-900">{w.name}</span>
+                              <span className="block text-xs text-ink-400">{workoutSummary(w)}</span>
+                            </span>
+                            {expandedWorkoutId === w.id
+                              ? <ChevronDown className="h-4 w-4 shrink-0 text-ink-400" />
+                              : <ChevronRight className="h-4 w-4 shrink-0 text-ink-400" />}
+                          </button>
+                          <div className="flex items-center">
+                            <button onClick={() => moveWorkout(i, -1)} disabled={i === 0} className="rounded p-1 text-ink-400 hover:bg-ink-100 disabled:opacity-30" aria-label="Move up"><ArrowUp className="h-4 w-4" /></button>
+                            <button onClick={() => moveWorkout(i, 1)} disabled={i === phaseWorkouts.length - 1} className="rounded p-1 text-ink-400 hover:bg-ink-100 disabled:opacity-30" aria-label="Move down"><ArrowDown className="h-4 w-4" /></button>
+                            <button onClick={() => removeWorkoutFromPhase(w.id)} className="rounded p-1 text-ink-400 hover:bg-rose-500/15 hover:text-rose-400" aria-label="Remove"><X className="h-4 w-4" /></button>
                           </div>
                         </div>
-                        <Link
-                          href={`/dashboard/workouts?select=${w.id}`}
-                          className="btn-secondary px-2.5 py-1.5 text-xs"
-                          title="Build warm-ups, exercises & rest times"
-                        >
-                          <Pencil className="h-3.5 w-3.5" /> Build
-                        </Link>
-                        <div className="flex items-center">
-                          <button onClick={() => moveWorkout(i, -1)} disabled={i === 0} className="rounded p-1 text-ink-400 hover:bg-ink-100 disabled:opacity-30" aria-label="Move up"><ArrowUp className="h-4 w-4" /></button>
-                          <button onClick={() => moveWorkout(i, 1)} disabled={i === phaseWorkouts.length - 1} className="rounded p-1 text-ink-400 hover:bg-ink-100 disabled:opacity-30" aria-label="Move down"><ArrowDown className="h-4 w-4" /></button>
-                          <button onClick={() => removeWorkoutFromPhase(w.id)} className="rounded p-1 text-ink-400 hover:bg-rose-500/15 hover:text-rose-400" aria-label="Remove"><X className="h-4 w-4" /></button>
-                        </div>
+                        {expandedWorkoutId === w.id && (
+                          <div className="border-t border-ink-100 bg-ink-50/40 p-3">
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
+                              Build {w.name} — warm-ups, exercises & rest
+                            </p>
+                            <WorkoutBuilder workoutId={w.id} />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
