@@ -21,8 +21,8 @@ function restLabel(seconds: number) {
   return s === 0 ? `${m}m` : `${m}m ${s}s`;
 }
 
-// 10s, 20s, 30s, then 30s intervals up to 5 minutes.
-const REST_SECONDS = [10, 20, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300];
+// 0s, then 30s intervals up to 5 minutes (90s omitted).
+const REST_SECONDS = [0, 30, 60, 120, 150, 180, 210, 240, 270, 300];
 const REST_OPTIONS = REST_SECONDS.map((s) => restLabel(s));
 
 /**

@@ -7,6 +7,7 @@ import {
   ArrowLeft, MessageSquare, Pencil, Trash2, Scale, Target, Flag, Activity,
   Dumbbell, Calendar, Sparkles, Clock, Layers, LineChart, Loader2, Images,
   Mail, Check, KeyRound, X, Apple, CheckCircle2, ClipboardCheck, UserCog, FileText, Plus,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Modal, Field, EmptyState } from "@/components/ui/Modal";
@@ -14,6 +15,7 @@ import { PhotoCompare } from "@/components/PhotoCompare";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ShareInvite } from "@/components/ui/ShareInvite";
 import { MediaEditor } from "@/components/MediaEditor";
+import { WorkoutBuilder } from "@/components/WorkoutBuilder";
 import { WeightChart, AdherenceRing } from "@/components/dashboard/Charts";
 import { useApp } from "@/lib/store";
 import { type ClientStatus, type TrainingMedia } from "@/lib/data";
@@ -48,7 +50,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     workouts: libWorkouts, programs, mealPlans, forms, clientPlans, completions, photos,
     weightLogs, checkins, nutritionLogs, session, assignCoach,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, addPhoto, removePhoto,
-    addMealPlan, updateMealPlan,
+    addMealPlan, updateMealPlan, addWorkout,
   } = useApp();
   const [coaches, setCoaches] = useState<{ email: string; name: string; role: string }[]>([]);
   const router = useRouter();
@@ -57,6 +59,11 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   const [tab, setTab] = useState<Tab>("Overview");
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Build / edit an assigned workout's warm-ups, exercises & rest inline,
+  // right here on the client's profile.
+  const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null);
+  const [newWorkoutName, setNewWorkoutName] = useState("");
 
   // Create / edit a client-specific meal plan straight from the client profile.
   const [mealOpen, setMealOpen] = useState(false);
@@ -383,6 +390,18 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
     setMealOpen(false);
   }
 
+  // Create a brand-new workout, assign it to this client, and open its
+  // builder immediately so it can be built out right here.
+  function createAndAssignWorkout() {
+    if (!c) return;
+    const name = newWorkoutName.trim();
+    if (!name) return;
+    const w = addWorkout({ name, category: "Strength", durationMin: 45, difficulty: "Beginner", exercises: [] });
+    toggleAssignedWorkout(c.id, w.id);
+    setNewWorkoutName("");
+    setExpandedWorkoutId(w.id);
+  }
+
   return (
     <>
       <Link
@@ -686,13 +705,27 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     disabled={unassignedWorkouts.length === 0}
                   >
                     <option value="">
-                      {unassignedWorkouts.length === 0 ? "All workouts assigned" : "+ Assign a workout…"}
+                      {unassignedWorkouts.length === 0 ? "All workouts assigned" : "+ Assign from library…"}
                     </option>
                     {unassignedWorkouts.map((w) => (
                       <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Create a brand-new workout for this client, right here */}
+              <div className="mt-3 flex gap-2">
+                <input
+                  className="input flex-1"
+                  value={newWorkoutName}
+                  onChange={(e) => setNewWorkoutName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") createAndAssignWorkout(); }}
+                  placeholder={`New workout name (e.g. ${c.name.split(" ")[0]}'s Day 1)`}
+                />
+                <button className="btn-secondary shrink-0" onClick={createAndAssignWorkout} disabled={!newWorkoutName.trim()}>
+                  <Plus className="h-4 w-4" /> Create & build
+                </button>
               </div>
 
               {assignedWorkouts.length === 0 ? (
@@ -702,38 +735,59 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
                     title="No workouts assigned"
                     description={
                       libWorkouts.length === 0
-                        ? "Add workouts in the Training section (or load starter content), then assign them here."
-                        : "Use the dropdown above to assign workouts from your library. The member sees only what's assigned."
-                    }
-                    action={
-                      libWorkouts.length === 0
-                        ? <Link href="/dashboard/workouts" className="btn-primary">Go to Workouts</Link>
-                        : undefined
+                        ? "Create a workout above, or assign one from the Training section once you've built your library."
+                        : "Create a new workout above, or assign one from the dropdown. The member sees only what's assigned."
                     }
                   />
                 </div>
               ) : (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {assignedWorkouts.map((w) => (
-                    <div key={w.id} className="rounded-xl border border-ink-100 p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-ink-900">{w.name}</h3>
-                        <button
-                          onClick={() => toggleAssignedWorkout(c.id, w.id)}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-400 transition hover:bg-rose-500/15 hover:text-rose-400"
-                          aria-label={`Remove ${w.name}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                <div className="mt-4 space-y-2">
+                  {assignedWorkouts.map((w) => {
+                    const expanded = expandedWorkoutId === w.id;
+                    return (
+                      <div key={w.id} className="overflow-hidden rounded-xl border border-ink-100">
+                        <div className="flex items-center gap-3 p-3">
+                          <button
+                            onClick={() => setExpandedWorkoutId(expanded ? null : w.id)}
+                            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-brand-400">
+                              <Dumbbell className="h-4 w-4" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-ink-900">{w.name}</span>
+                              <span className="block text-xs text-ink-500">
+                                {w.durationMin} min · {w.exercises.length} exercise{w.exercises.length === 1 ? "" : "s"}
+                              </span>
+                            </span>
+                            {expanded
+                              ? <ChevronDown className="h-4 w-4 shrink-0 text-ink-400" />
+                              : <ChevronRight className="h-4 w-4 shrink-0 text-ink-400" />}
+                          </button>
+                          <button
+                            onClick={() => toggleAssignedWorkout(c.id, w.id)}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-400 transition hover:bg-rose-500/15 hover:text-rose-400"
+                            aria-label={`Remove ${w.name}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {expanded && (
+                          <div className="border-t border-ink-100 bg-ink-50/40 p-3">
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
+                              Build {w.name} — warm-ups, exercises & rest
+                            </p>
+                            <WorkoutBuilder workoutId={w.id} />
+                          </div>
+                        )}
                       </div>
-                      <div className="mt-3 space-y-1.5 text-sm text-ink-500">
-                        <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-ink-400" /> {w.durationMin} min</div>
-                        <div className="flex items-center gap-2"><Layers className="h-4 w-4 text-ink-400" /> {w.exercises.length} exercises</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
+              <p className="mt-3 text-xs text-ink-400">
+                Editing here updates the workout everywhere it&apos;s used (Training library, any program, other clients it&apos;s assigned to). To build a copy just for {c.name.split(" ")[0]}, create a new workout above.
+              </p>
             </div>
 
             {/* Assigned forms */}
