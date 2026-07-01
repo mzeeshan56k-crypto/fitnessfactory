@@ -35,6 +35,15 @@ export function VideoUpload({
     setError("");
     setFileName(file.name);
     try {
+      // Check first so we can show an actionable message instead of Blob's
+      // generic "Failed to retrieve the client token" (it discards our
+      // server's actual error text whenever the handshake isn't a 200).
+      const status = await fetch("/api/upload/video").then((r) => r.json()).catch(() => null);
+      if (status && status.configured === false) {
+        throw new Error(
+          "Video upload isn't set up yet. Ask your admin to enable it: Vercel dashboard → Storage → Create Database → Blob → Connect to this project, then redeploy.",
+        );
+      }
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const blob = await upload(`${pathPrefix}/${Date.now()}-${safeName}`, file, {
         access: "public",
@@ -42,7 +51,12 @@ export function VideoUpload({
       });
       onUploaded(blob.url, file.name);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+      const message = e instanceof Error ? e.message : "Upload failed. Please try again.";
+      setError(
+        message.includes("Failed to retrieve the client token")
+          ? "Video upload isn't set up yet. Ask your admin to enable it: Vercel dashboard → Storage → Create Database → Blob → Connect to this project, then redeploy."
+          : message,
+      );
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
