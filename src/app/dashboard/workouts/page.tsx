@@ -58,6 +58,7 @@ export default function TrainingPage() {
   const [tab, setTab] = useState<Tab>("programs");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [workoutQuery, setWorkoutQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<(typeof exerciseTypes)[number]>("All");
   const [video, setVideo] = useState<{ src: string; title: string } | null>(null);
 
@@ -130,6 +131,13 @@ export default function TrainingPage() {
 
   const selectedWorkout: Workout | null =
     app.workouts.find((w) => w.id === selectedId) ?? app.workouts[0] ?? null;
+
+  const filteredWorkouts = workoutQuery.trim()
+    ? app.workouts.filter((w) => {
+        const q = workoutQuery.toLowerCase();
+        return w.name.toLowerCase().includes(q) || w.category.toLowerCase().includes(q);
+      })
+    : app.workouts;
 
   function submitWorkout() {
     if (!wName.trim()) return;
@@ -441,57 +449,66 @@ export default function TrainingPage() {
             }
           />
         ) : (
-          <div className="space-y-6">
-            {/* Clean workout list (Trainerize-style rows) */}
-            <div className="card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-                <h2 className="text-sm font-semibold text-ink-900">Your workouts</h2>
-                <span className="badge bg-ink-100 text-ink-600">{app.workouts.length}</span>
+          <div className="grid gap-5 lg:grid-cols-[21rem_1fr] lg:items-start">
+            {/* Condensed, searchable workout list — sits beside the builder, not
+                above it, so you never have to scroll past it to build. */}
+            <div className="card flex flex-col overflow-hidden lg:sticky lg:top-20 lg:max-h-[calc(100vh-6.5rem)]">
+              <div className="border-b border-ink-100 p-3">
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <h2 className="text-sm font-semibold text-ink-900">Your workouts</h2>
+                  <span className="badge bg-ink-100 text-ink-600">{app.workouts.length}</span>
+                </div>
+                <div className="relative mt-2">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                  <input
+                    value={workoutQuery}
+                    onChange={(e) => setWorkoutQuery(e.target.value)}
+                    placeholder="Search workouts…"
+                    className="input h-9 py-0 pl-9 text-sm"
+                  />
+                </div>
               </div>
-              <div className="divide-y divide-ink-100">
-                {app.workouts.map((w) => {
-                  const active = selectedWorkout?.id === w.id;
-                  return (
-                    <button
-                      key={w.id}
-                      onClick={() => setSelectedId(w.id)}
-                      className={cn(
-                        "flex w-full items-center gap-4 px-4 py-3 text-left transition hover:bg-ink-50",
-                        active && "bg-brand-500/10",
-                      )}
-                    >
-                      <span
+              <div className="divide-y divide-ink-100 overflow-y-auto scroll-thin">
+                {filteredWorkouts.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-sm text-ink-400">No workouts match your search.</p>
+                ) : (
+                  filteredWorkouts.map((w) => {
+                    const active = selectedWorkout?.id === w.id;
+                    return (
+                      <button
+                        key={w.id}
+                        onClick={() => setSelectedId(w.id)}
                         className={cn(
-                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
-                          active ? "bg-brand-600 text-white" : "bg-brand-500/15 text-brand-400",
+                          "flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-ink-50",
+                          active && "bg-brand-500/10",
                         )}
                       >
-                        <Dumbbell className="h-5 w-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-semibold text-ink-900">{w.name}</div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-500">
-                          <span>{w.category}</span>
-                          <span>·</span>
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> est. {w.durationMin} min
-                          </span>
-                          <span>·</span>
-                          <span>{w.exercises.length} exercises</span>
+                        <span
+                          className={cn(
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                            active ? "bg-brand-600 text-white" : "bg-brand-500/15 text-brand-400",
+                          )}
+                        >
+                          <Dumbbell className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold text-ink-900">{w.name}</div>
+                          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-500">
+                            <span className="truncate">{w.category}</span>
+                            <span>·</span>
+                            <span className="shrink-0">{w.exercises.length} ex</span>
+                          </div>
                         </div>
-                      </div>
-                      <span className={cn("badge hidden sm:inline-flex", difficultyClasses(w.difficulty))}>
-                        {w.difficulty}
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-ink-300" />
-                    </button>
-                  );
-                })}
+                        <ChevronRight className={cn("h-4 w-4 shrink-0", active ? "text-brand-400" : "text-ink-300")} />
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
 
             {/* Detail / builder panel */}
-            {selectedWorkout && (
+            {selectedWorkout ? (
               <div className="card p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 pb-4">
                   <div>
@@ -542,6 +559,14 @@ export default function TrainingPage() {
                 <div className="mt-4">
                   <WorkoutBuilder workoutId={selectedWorkout.id} />
                 </div>
+              </div>
+            ) : (
+              <div className="card">
+                <EmptyState
+                  icon={Dumbbell}
+                  title="Select a workout"
+                  description="Pick a workout on the left to build it out, or create a new one."
+                />
               </div>
             )}
           </div>
