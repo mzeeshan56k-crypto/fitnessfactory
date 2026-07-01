@@ -5,7 +5,7 @@ import {
 } from "react";
 import type {
   Client, Exercise, Workout, Program, MealPlan, Conversation, Message,
-  Appointment, ClientNote, FormReview, ClientPlan, WorkoutCompletion, ProgressPhoto, NutritionLog,
+  Appointment, ClientNote, FormReview, FormCheckRequest, ClientPlan, WorkoutCompletion, ProgressPhoto, NutritionLog,
   WeightEntry, CommunityPost, CommunityComment, GymClass,
 } from "@/lib/data";
 import type {
@@ -84,6 +84,9 @@ export interface DB {
   forms: CoachForm[];
   // Coach documentation, keyed by client id.
   formReviews: Record<string, FormReview[]>;
+  // Form-check video tasks (requested + submitted), keyed by client id. Visible
+  // to the assigned client, unlike formReviews which stay coach-private.
+  formCheckRequests: Record<string, FormCheckRequest[]>;
   clientNotes: Record<string, ClientNote[]>;
   recoveryNotes: Record<string, string>;
   // What the coach has assigned to each client, keyed by client id.
@@ -116,7 +119,7 @@ const emptyDB: DB = {
   clients: [], exercises: [], workouts: [], programs: [], mealPlans: [],
   conversations: [], appointments: [], kanban: emptyKanban, challenges: [],
   aiSuggestions: [], users: [], broadcasts: [], checkins: [], forms: [],
-  formReviews: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
+  formReviews: {}, formCheckRequests: {}, clientNotes: {}, recoveryNotes: {}, clientPlans: {}, completions: {}, photos: {},
   nutritionLogs: {}, weightLogs: {}, communityPosts: [], classes: [],
   settings: {
     trainerName: "Your Name",
@@ -199,6 +202,16 @@ interface AppContextValue extends DB {
   deleteFormReview: (clientId: string, id: string) => void;
   addClientNote: (clientId: string, note: ClientNote) => void;
   setRecoveryNote: (clientId: string, text: string) => void;
+  // form-check video tasks
+  requestFormCheck: (clientId: string, exercise: string, note?: string) => void;
+  removeFormCheckRequest: (clientId: string, id: string) => void;
+  // member submits a video for a specific request (or a new ad-hoc one when requestId is null)
+  submitFormCheckVideo: (
+    clientId: string,
+    requestId: string | null,
+    video: { url: string; name?: string; exercise: string },
+  ) => void;
+  markFormCheckReviewed: (clientId: string, id: string) => void;
   // assignment (coach → client)
   toggleAssignedWorkout: (clientId: string, workoutId: string) => void;
   toggleAssignedForm: (clientId: string, formId: string) => void;
@@ -465,6 +478,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         nutritionLogs: without(d.nutritionLogs),
         clientPlans: without(d.clientPlans),
         formReviews: without(d.formReviews),
+        formCheckRequests: without(d.formCheckRequests),
         clientNotes: without(d.clientNotes),
         recoveryNotes: without(d.recoveryNotes),
         currentClientId: d.currentClientId === id ? (d.clients.find((c) => c.id !== id)?.id ?? null) : d.currentClientId,
@@ -864,6 +878,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...d,
       formReviews: { ...d.formReviews, [clientId]: (d.formReviews[clientId] ?? []).filter((r) => r.id !== id) },
     })), []);
+
+  /* ----- form-check video tasks ----- */
+  // Coach requests a clip from a client — shows up as an assigned task, like
+  // check-ins / weigh-ins.
+  const requestFormCheck = useCallback((clientId: string, exercise: string, note?: string) => {
+    const req: FormCheckRequest = {
+      id: uid("fcr"), exercise: exercise.trim() || "Form check",
+      note: note?.trim() || undefined, requestedAt: new Date().toISOString(), status: "pending",
+    };
+    setDb((d) => ({
+      ...d,
+      formCheckRequests: { ...d.formCheckRequests, [clientId]: [req, ...(d.formCheckRequests[clientId] ?? [])] },
+    }));
+  }, []);
+  const removeFormCheckRequest = useCallback((clientId: string, id: string) =>
+    setDb((d) => ({
+      ...d,
+      formCheckRequests: { ...d.formCheckRequests, [clientId]: (d.formCheckRequests[clientId] ?? []).filter((r) => r.id !== id) },
+    })), []);
+  // Member submits a video, either fulfilling a specific pending request or
+  // (requestId === null) creating a new ad-hoc submission on their own.
+  const submitFormCheckVideo = useCallback((
+    clientId: string,
+    requestId: string | null,
+    video: { url: string; name?: string; exercise: string },
+  ) => {
+    const now = new Date().toISOString();
+    setDb((d) => {
+      const list = d.formCheckRequests[clientId] ?? [];
+      const next = requestId
+        ? list.map((r) =>
+            r.id === requestId
+              ? { ...r, status: "submitted" as const, videoUrl: video.url, videoName: video.name, submittedAt: now }
+              : r,
+          )
+        : [
+            {
+              id: uid("fcr"), exercise: video.exercise.trim() || "Form check",
+              requestedAt: now, status: "submitted" as const,
+              videoUrl: video.url, videoName: video.name, submittedAt: now,
+            },
+            ...list,
+          ];
+      return { ...d, formCheckRequests: { ...d.formCheckRequests, [clientId]: next } };
+    });
+    if (sessionRef.current?.role === "member") {
+      memberSync({ kind: "formcheck-submit", requestId, video });
+    }
+  }, [memberSync]);
+  // Coach marks a submission as reviewed (paired with saving a FormReview).
+  const markFormCheckReviewed = useCallback((clientId: string, id: string) =>
+    setDb((d) => ({
+      ...d,
+      formCheckRequests: {
+        ...d.formCheckRequests,
+        [clientId]: (d.formCheckRequests[clientId] ?? []).map((r) => (r.id === id ? { ...r, status: "reviewed" as const } : r)),
+      },
+    })), []);
   const addClientNote = useCallback((clientId: string, note: ClientNote) =>
     setDb((d) => ({
       ...d,
@@ -1023,6 +1095,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
+    requestFormCheck, removeFormCheckRequest, submitFormCheckVideo, markFormCheckReviewed,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser,
@@ -1037,6 +1110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addCommunityPost, toggleCommunityLike, addCommunityComment, removeCommunityPost,
     addClass, removeClass, toggleClassEnroll,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
+    requestFormCheck, removeFormCheckRequest, submitFormCheckVideo, markFormCheckReviewed,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,

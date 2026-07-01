@@ -213,6 +213,21 @@ export interface FormReview {
   videoName?: string;
 }
 
+// A form-check video task: the coach requests a clip (or the client uploads
+// one on their own), the client submits the video, and the coach reviews it
+// (producing a FormReview). Visible to the assigned client so it behaves like
+// an assigned check-in / weigh-in task.
+export interface FormCheckRequest {
+  id: string;
+  exercise: string;
+  note?: string; // trainer instructions, e.g. "film from the side, full depth"
+  requestedAt: string; // ISO
+  status: "pending" | "submitted" | "reviewed";
+  videoUrl?: string;
+  videoName?: string;
+  submittedAt?: string;
+}
+
 // What a coach has assigned to a specific client.
 export interface ClientPlan {
   workoutIds: string[];

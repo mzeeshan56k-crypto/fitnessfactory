@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import {
-  ScanLine, Video, Film, Sparkles, Save, AlertTriangle, Activity, Trash2,
+  ScanLine, Film, Sparkles, Save, AlertTriangle, Activity, Trash2,
+  ClipboardList, Clock, CheckCircle2, X, Send,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { EmptyState, Field } from "@/components/ui/Modal";
+import { VideoPreview } from "@/components/ui/VideoUpload";
 import { useApp, useMyClients } from "@/lib/store";
 import { askAI, aiConfigured } from "@/lib/ai";
 import { cn } from "@/lib/utils";
@@ -98,7 +100,7 @@ export default function FormCheckPage() {
 
   const [clientId, setClientId] = useState<string>("");
   const [exercise, setExercise] = useState<string>(DEFAULT_LIFTS[0]);
-  const [videoName, setVideoName] = useState<string>("");
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [faults, setFaults] = useState<string[]>([]);
   const [notes, setNotes] = useState<string>("");
   const [bullets, setBullets] = useState<string[]>([]);
@@ -107,9 +109,18 @@ export default function FormCheckPage() {
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [error, setError] = useState<string>("");
 
+  // Request-a-video mini form
+  const [reqExercise, setReqExercise] = useState<string>(DEFAULT_LIFTS[0]);
+  const [reqNote, setReqNote] = useState<string>("");
+
   const activeClientId = clientId || myClients[0]?.id || "";
   // Form-check reviews persist in the shared workspace, keyed by client.
   const reviews = app.formReviews[activeClientId] ?? [];
+  const requests = app.formCheckRequests[activeClientId] ?? [];
+  const pending = requests.filter((r) => r.status === "pending");
+  const needsReview = requests.filter((r) => r.status === "submitted");
+  const reviewed = requests.filter((r) => r.status === "reviewed");
+  const activeRequest = requests.find((r) => r.id === activeRequestId) ?? null;
 
   const exerciseOptions = useMemo(() => {
     const fromStore = app.exercises.map((e) => e.name);
@@ -131,11 +142,11 @@ export default function FormCheckPage() {
   if (myClients.length === 0) {
     return (
       <>
-        <PageHeader title="Form Check" subtitle="Review client technique and flag weaknesses" />
+        <PageHeader title="Form Check" subtitle="Review client-submitted technique videos and flag weaknesses" />
         <EmptyState
           icon={ScanLine}
           title="No clients yet"
-          description="Add a client to start running form check sessions and flag technique weaknesses."
+          description="Add a client to start requesting form-check videos and reviewing technique."
         />
       </>
     );
@@ -143,6 +154,32 @@ export default function FormCheckPage() {
 
   function toggleFault(f: string) {
     setFaults((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
+  }
+
+  function selectClient(id: string) {
+    setClientId(id);
+    setActiveRequestId(null);
+    setFaults([]);
+    setNotes("");
+    setBullets([]);
+    setAnalysis("");
+  }
+
+  function reviewSubmission(id: string) {
+    const r = requests.find((x) => x.id === id);
+    if (!r) return;
+    setActiveRequestId(id);
+    setExercise(r.exercise);
+    setFaults([]);
+    setNotes("");
+    setBullets([]);
+    setAnalysis("");
+  }
+
+  function sendRequest() {
+    if (!activeClientId) return;
+    app.requestFormCheck(activeClientId, reqExercise, reqNote.trim() || undefined);
+    setReqNote("");
   }
 
   async function generateBullets() {
@@ -215,15 +252,16 @@ export default function FormCheckPage() {
       faults: [...faults],
       notes: notes.trim(),
       weaknessSummary: summary,
-      videoName: videoName || undefined,
+      videoName: activeRequest?.videoName,
     };
     app.addFormReview(activeClientId, review);
+    if (activeRequest) app.markFormCheckReviewed(activeClientId, activeRequest.id);
     // reset the working session
+    setActiveRequestId(null);
     setFaults([]);
     setNotes("");
     setBullets([]);
     setAnalysis("");
-    setVideoName("");
   }
 
   function deleteReview(id: string) {
@@ -234,18 +272,18 @@ export default function FormCheckPage() {
 
   return (
     <>
-      <PageHeader title="Form Check" subtitle="Review client technique and flag weaknesses" />
+      <PageHeader title="Form Check" subtitle="Review client-submitted technique videos and flag weaknesses" />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left: session setup */}
+        {/* Left: review session */}
         <div className="space-y-6 lg:col-span-2">
           <div className="card p-6">
             <div className="flex items-center gap-2">
               <ScanLine className="h-5 w-5 text-brand-400" />
-              <h2 className="font-semibold text-ink-900">Form check session</h2>
+              <h2 className="font-semibold text-ink-900">Review session</h2>
             </div>
             <p className="mt-1 text-sm text-ink-500">
-              Attach a movement clip and select the lift under review.
+              Pick a client, then select a submitted clip from the queue on the right to review it.
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -253,14 +291,7 @@ export default function FormCheckPage() {
                 <select
                   className="input"
                   value={activeClientId}
-                  onChange={(e) => {
-                    setClientId(e.target.value);
-                    setFaults([]);
-                    setNotes("");
-                    setBullets([]);
-                    setAnalysis("");
-                    setVideoName("");
-                  }}
+                  onChange={(e) => selectClient(e.target.value)}
                 >
                   {myClients.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -285,44 +316,27 @@ export default function FormCheckPage() {
               </Field>
             </div>
 
-            {/* Video attach + preview frame */}
+            {/* Video under review — always the client's own submission, never uploaded by the coach */}
             <div className="mt-4">
-              <span className="label">Movement clip</span>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex aspect-video items-center justify-center rounded-2xl border border-ink-200 bg-ink-50 text-ink-400">
-                  {videoName ? (
-                    <div className="flex flex-col items-center gap-2 px-4 text-center">
-                      <Film className="h-8 w-8 text-brand-400" />
-                      <span className="truncate text-xs text-ink-500">{videoName}</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <Video className="h-8 w-8" />
-                      <span className="text-xs">No clip attached</span>
-                    </div>
-                  )}
+              <span className="label">Client&rsquo;s clip</span>
+              {activeRequest?.videoUrl ? (
+                <div className="space-y-2">
+                  <VideoPreview url={activeRequest.videoUrl} className="max-h-96" />
+                  <p className="text-xs text-ink-500">
+                    Submitted by {clientName} · {activeRequest.submittedAt ? new Date(activeRequest.submittedAt).toLocaleString() : ""}
+                    {activeRequest.note && <> · Note to client: &ldquo;{activeRequest.note}&rdquo;</>}
+                  </p>
                 </div>
-                <div className="flex flex-col justify-center gap-3">
-                  <label className="btn-secondary inline-flex w-fit cursor-pointer items-center gap-2">
-                    <Video className="h-4 w-4" />
-                    {videoName ? "Replace clip" : "Attach clip"}
-                    <input
-                      type="file"
-                      accept="video/*"
-                      className="hidden"
-                      onChange={(e) => setVideoName(e.target.files?.[0]?.name ?? "")}
-                    />
-                  </label>
-                  {videoName && (
-                    <span className="text-xs text-ink-500">
-                      Selected: <span className="text-ink-900">{videoName}</span>
+              ) : (
+                <div className="flex aspect-video items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-ink-50 text-center text-ink-400">
+                  <div className="flex flex-col items-center gap-2 px-4">
+                    <Film className="h-8 w-8" />
+                    <span className="text-xs">
+                      Select a clip from &ldquo;Needs review&rdquo; on the right — clients upload their own videos, coaches review them here.
                     </span>
-                  )}
-                  <span className="text-xs text-ink-400">
-                    Reviewing {clientName}&rsquo;s {exercise}.
-                  </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -377,7 +391,7 @@ export default function FormCheckPage() {
               </button>
               <button className="btn-primary inline-flex items-center gap-2" onClick={saveReview}>
                 <Save className="h-4 w-4" />
-                Save review
+                {activeRequest ? "Save review" : "Save review (no clip)"}
               </button>
             </div>
 
@@ -396,8 +410,107 @@ export default function FormCheckPage() {
           </div>
         </div>
 
-        {/* Right: weakness summary */}
+        {/* Right: request + queue + weakness summary */}
         <div className="space-y-6">
+          {/* Request a video from the client — an assigned task, like check-ins */}
+          <div className="card p-6">
+            <div className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-brand-400" />
+              <h2 className="font-semibold text-ink-900">Request a video</h2>
+            </div>
+            <p className="mt-1 text-sm text-ink-500">
+              Assign {clientName} a form-check task — they&rsquo;ll upload the clip from their portal.
+            </p>
+            <div className="mt-3 space-y-3">
+              <select className="input" value={reqExercise} onChange={(e) => setReqExercise(e.target.value)}>
+                {exerciseOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+              <textarea
+                className="input min-h-[64px] text-sm"
+                placeholder="Filming notes for the client (optional) — e.g. film from the side, full depth"
+                value={reqNote}
+                onChange={(e) => setReqNote(e.target.value)}
+              />
+              <button className="btn-primary w-full" onClick={sendRequest}>
+                <Send className="h-4 w-4" /> Request from {clientName.split(" ")[0]}
+              </button>
+            </div>
+          </div>
+
+          {/* Queue */}
+          <div className="card p-6">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-accent-400" />
+              <h2 className="font-semibold text-ink-900">Video queue</h2>
+            </div>
+
+            {needsReview.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Needs review</p>
+                <div className="space-y-2">
+                  {needsReview.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => reviewSubmission(r.id)}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition",
+                        activeRequestId === r.id
+                          ? "border-brand-500/40 bg-brand-500/15"
+                          : "border-ink-200 bg-ink-50 hover:border-brand-300",
+                      )}
+                    >
+                      <Film className="h-4 w-4 shrink-0 text-brand-400" />
+                      <span className="min-w-0 flex-1 truncate text-ink-800">{r.exercise}</span>
+                      <span className="badge shrink-0 bg-brand-500/15 text-brand-400">New</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {pending.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Pending upload</p>
+                <div className="space-y-2">
+                  {pending.map((r) => (
+                    <div key={r.id} className="flex items-center gap-2 rounded-xl border border-dashed border-ink-200 px-3 py-2 text-sm text-ink-500">
+                      <Clock className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{r.exercise}</span>
+                      <button
+                        onClick={() => app.removeFormCheckRequest(activeClientId, r.id)}
+                        className="shrink-0 text-ink-300 hover:text-rose-400"
+                        aria-label="Cancel request"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {reviewed.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Reviewed</p>
+                <div className="space-y-2">
+                  {reviewed.slice(0, 5).map((r) => (
+                    <div key={r.id} className="flex items-center gap-2 rounded-xl border border-ink-100 px-3 py-2 text-sm text-ink-500">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-accent-400" />
+                      <span className="min-w-0 flex-1 truncate">{r.exercise}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {requests.length === 0 && (
+              <p className="mt-3 rounded-xl border border-dashed border-ink-200 bg-ink-50/40 p-4 text-center text-xs text-ink-400">
+                No requests yet for {clientName}. Request a video above.
+              </p>
+            )}
+          </div>
+
+          {/* Weakness summary */}
           <div className="card p-6">
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-accent-400" />

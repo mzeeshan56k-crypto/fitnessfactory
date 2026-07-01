@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home, Dumbbell, Apple, LineChart, MessageSquare,
   Activity, CalendarCheck, GraduationCap, Trophy, ClipboardCheck, Award, UsersRound,
-  HeartPulse, FileText, Target, CalendarDays, Medal, Video,
+  HeartPulse, FileText, Target, CalendarDays, Medal, Video, ScanLine,
 } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
@@ -25,6 +25,7 @@ const navBadges = { href: "/client/achievements", label: "Badges Earned", icon: 
 const navClasses = { href: "/client/classes", label: "Classes", icon: Video };
 const navChallenges = { href: "/client/challenges", label: "Challenges", icon: Trophy };
 const navCheckin = { href: "/client/checkin", label: "Check-in", icon: ClipboardCheck };
+const navFormCheck = { href: "/client/form-check", label: "Form Check", icon: ScanLine };
 const navBiometrics = { href: "/client/biometrics", label: "Biometrics", icon: Activity };
 const navRecovery = { href: "/client/recovery", label: "Recovery", icon: HeartPulse };
 const navForms = { href: "/client/forms", label: "Forms", icon: FileText };
@@ -34,7 +35,7 @@ const navCoach = { href: "/client/messages", label: "Coach", icon: MessageSquare
 
 const nav = [
   navToday, navCalendar, navGoals, navWorkouts, navNutrition, navProgress,
-  navBadges, navClasses, navChallenges, navCheckin, navBiometrics, navRecovery,
+  navBadges, navClasses, navChallenges, navCheckin, navFormCheck, navBiometrics, navRecovery,
   navForms, navResources, navCommunity, navCoach,
 ];
 

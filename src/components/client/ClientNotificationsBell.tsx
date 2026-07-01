@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Bell, FileText, Dumbbell, Apple, MessageSquare, CalendarCheck, Layers, Video,
+  Bell, FileText, Dumbbell, Apple, MessageSquare, CalendarCheck, Layers, Video, ScanLine,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,7 @@ export function ClientNotificationsBell() {
   const lastCoach = conv?.messages.filter((m) => !m.fromClient).slice(-1)[0];
   const nextAppt = client ? app.appointments.find((a) => a.clientId === client.id) : undefined;
   const liveClasses = client ? app.classes.filter((c) => c.type === "live") : [];
+  const pendingFormChecks = client ? (app.formCheckRequests[client.id] ?? []).filter((r) => r.status === "pending") : [];
 
   const items: Item[] = [];
   // Assigned training program (shows the moment a coach assigns one).
@@ -73,6 +74,9 @@ export function ClientNotificationsBell() {
   }
   for (const cls of liveClasses) {
     items.push({ id: "cls_" + cls.id, icon: Video, tint: "bg-rose-500/15 text-rose-400", title: `Class: ${cls.title}`, sub: `${cls.durationMin} min · ${cls.category}`, href: "/client/classes" });
+  }
+  for (const r of pendingFormChecks) {
+    items.push({ id: "fcr_" + r.id, icon: ScanLine, tint: "bg-amber-500/15 text-amber-500", title: `Form check requested: ${r.exercise}`, sub: r.note || "Upload a clip for your coach to review", href: "/client/form-check" });
   }
 
   const seenSet = new Set(seen);

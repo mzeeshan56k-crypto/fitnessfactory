@@ -19,6 +19,7 @@ interface Workspace {
   photos?: Record<string, unknown>;
   nutritionLogs?: Record<string, unknown>;
   weightLogs?: Record<string, unknown>;
+  formCheckRequests?: Record<string, unknown>;
   settings?: Record<string, unknown>;
   [k: string]: unknown;
 }
@@ -50,7 +51,9 @@ function scopeForMember(ws: Workspace, user: { email: string; clientId?: string 
     broadcasts: [],
     aiSuggestions: [],
     kanban: [],
-    // Coach-private documentation is never sent to members.
+    // Coach-private documentation is never sent to members. Form-check
+    // REQUESTS (the task + submitted video) are visible to the assigned
+    // client — only the coach's private review notes/faults stay hidden.
     formReviews: {},
     clientNotes: {},
     recoveryNotes: {},
@@ -60,6 +63,7 @@ function scopeForMember(ws: Workspace, user: { email: string; clientId?: string 
     photos: myId && ws.photos?.[myId] ? { [myId]: ws.photos[myId] } : {},
     nutritionLogs: myId && ws.nutritionLogs?.[myId] ? { [myId]: ws.nutritionLogs[myId] } : {},
     weightLogs: myId && ws.weightLogs?.[myId] ? { [myId]: ws.weightLogs[myId] } : {},
+    formCheckRequests: myId && ws.formCheckRequests?.[myId] ? { [myId]: ws.formCheckRequests[myId] } : {},
     settings,
     currentClientId: myId,
   };

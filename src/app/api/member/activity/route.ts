@@ -31,6 +31,11 @@ interface Challenge {
 interface GymClass {
   id: string; title: string; [k: string]: unknown;
 }
+interface FormCheckRequest {
+  id: string; exercise: string; note?: string; requestedAt: string;
+  status: "pending" | "submitted" | "reviewed";
+  videoUrl?: string; videoName?: string; submittedAt?: string;
+}
 interface WsClient {
   id: string; email: string;
   currentWeight?: number; startWeight?: number; goalWeight?: number;
@@ -49,6 +54,7 @@ interface Workspace {
   communityPosts?: CommunityPost[];
   challenges?: Challenge[];
   classes?: GymClass[];
+  formCheckRequests?: Record<string, FormCheckRequest[]>;
   [k: string]: unknown;
 }
 
@@ -65,7 +71,8 @@ export async function POST(req: NextRequest) {
   let body: {
     kind?:
       | "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight"
-      | "appointment" | "appointment-remove" | "appointment-book" | "community" | "challenges" | "classes";
+      | "appointment" | "appointment-remove" | "appointment-book" | "community" | "challenges" | "classes"
+      | "formcheck-submit";
     text?: string;
     answers?: Record<string, string | number>;
     formId?: string;
@@ -80,6 +87,8 @@ export async function POST(req: NextRequest) {
     communityPosts?: CommunityPost[];
     challenges?: Challenge[];
     classes?: GymClass[];
+    requestId?: string | null;
+    video?: { url?: string; name?: string; exercise?: string };
   };
   try {
     body = await req.json();
@@ -241,6 +250,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing classes." }, { status: 400 });
     }
     ws.classes = body.classes.slice(0, 200);
+  } else if (body.kind === "formcheck-submit") {
+    const video = body.video;
+    if (!video?.url) return NextResponse.json({ error: "Missing video." }, { status: 400 });
+    const now = new Date().toISOString();
+    const list = ws.formCheckRequests?.[mine.id] ?? [];
+    const requestId = body.requestId ?? null;
+    const next = requestId
+      ? list.map((r) =>
+          r.id === requestId
+            ? { ...r, status: "submitted" as const, videoUrl: String(video.url), videoName: video.name, submittedAt: now }
+            : r,
+        )
+      : [
+          {
+            id: uid("fcr"), exercise: String(video.exercise || "Form check").trim() || "Form check",
+            requestedAt: now, status: "submitted" as const,
+            videoUrl: String(video.url), videoName: video.name, submittedAt: now,
+          },
+          ...list,
+        ];
+    ws.formCheckRequests = { ...(ws.formCheckRequests ?? {}), [mine.id]: next };
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });
   }

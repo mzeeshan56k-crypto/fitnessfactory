@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, ClipboardCheck, Dumbbell, MessageSquare, CheckCheck, Apple } from "lucide-react";
+import { Bell, ClipboardCheck, Dumbbell, MessageSquare, CheckCheck, Apple, ScanLine } from "lucide-react";
 import { useApp, useMyClients } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { useLocalState } from "@/lib/useLocalState";
 
 type Notif = {
   id: string;
-  kind: "checkin" | "workout" | "message" | "nutrition";
+  kind: "checkin" | "workout" | "message" | "nutrition" | "formcheck";
   title: string;
   sub: string;
   href: string;
@@ -21,6 +21,7 @@ const ICONS = {
   workout: Dumbbell,
   message: MessageSquare,
   nutrition: Apple,
+  formcheck: ScanLine,
 } as const;
 
 const TINTS = {
@@ -28,6 +29,7 @@ const TINTS = {
   workout: "bg-brand-500/15 text-brand-400",
   message: "bg-sky-500/15 text-sky-400",
   nutrition: "bg-amber-500/15 text-amber-400",
+  formcheck: "bg-violet-500/15 text-violet-400",
 } as const;
 
 export function NotificationsBell() {
@@ -91,6 +93,19 @@ export function NotificationsBell() {
       href: `/dashboard/clients/${c.id}`,
       ts: log.updatedAt,
     });
+  }
+  for (const c of clients) {
+    for (const r of app.formCheckRequests[c.id] ?? []) {
+      if (r.status !== "submitted" || !r.submittedAt) continue;
+      notifs.push({
+        id: "fc_" + r.id,
+        kind: "formcheck",
+        title: `${c.name} submitted a form check video`,
+        sub: r.exercise,
+        href: `/dashboard/form-check`,
+        ts: +new Date(r.submittedAt),
+      });
+    }
   }
   for (const conv of app.conversations) {
     if (conv.unread <= 0 || !ids.has(conv.clientId)) continue;
