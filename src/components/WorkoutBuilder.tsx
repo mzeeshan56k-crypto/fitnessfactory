@@ -14,6 +14,17 @@ const SECTION_META: Record<Section, { label: string; tint: string }> = {
   cooldown: { label: "Cool-down", tint: "bg-sky-500/15 text-sky-500" },
 };
 
+function restLabel(seconds: number) {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s === 0 ? `${m}m` : `${m}m ${s}s`;
+}
+
+// 10s, 20s, 30s, then 30s intervals up to 5 minutes.
+const REST_SECONDS = [10, 20, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300];
+const REST_OPTIONS = REST_SECONDS.map((s) => restLabel(s));
+
 /**
  * Full step-by-step workout builder: add warm-ups, exercises and cool-downs from
  * the library, set reps/weight/rest per set, reorder, and add coaching notes.
@@ -44,7 +55,7 @@ export function WorkoutBuilder({ workoutId }: { workoutId: string }) {
     if (!ex) return;
     const we: WorkoutExercise = {
       exerciseId: ex.id, name: ex.name, muscle: ex.muscle,
-      sets: [{ reps: "10", weight: "—", rest: "60s" }],
+      sets: [{ reps: "10", weight: "—", rest: "1m" }],
       notes: ex.instructions || "",
       section: addSection,
     };
@@ -57,7 +68,7 @@ export function WorkoutBuilder({ workoutId }: { workoutId: string }) {
   function addSet(i: number) {
     patch((list) => list.map((ex, x) => {
       if (x !== i) return ex;
-      const last = ex.sets[ex.sets.length - 1] ?? { reps: "10", weight: "—", rest: "60s" };
+      const last = ex.sets[ex.sets.length - 1] ?? { reps: "10", weight: "—", rest: "1m" };
       return { ...ex, sets: [...ex.sets, { ...last }] };
     }));
   }
@@ -146,7 +157,12 @@ export function WorkoutBuilder({ workoutId }: { workoutId: string }) {
                         <td className="py-1.5 pl-1 font-semibold text-ink-700">{si + 1}</td>
                         <td className="py-1.5 pr-2"><input className="input h-9 py-1" value={s.reps} onChange={(e) => updateSet(i, si, { reps: e.target.value })} placeholder="10" /></td>
                         <td className="py-1.5 pr-2"><input className="input h-9 py-1" value={s.weight} onChange={(e) => updateSet(i, si, { weight: e.target.value })} placeholder="—" /></td>
-                        <td className="py-1.5 pr-2"><input className="input h-9 py-1" value={s.rest} onChange={(e) => updateSet(i, si, { rest: e.target.value })} placeholder="60s" /></td>
+                        <td className="py-1.5 pr-2">
+                          <select className="input h-9 py-1" value={s.rest} onChange={(e) => updateSet(i, si, { rest: e.target.value })}>
+                            {!REST_OPTIONS.includes(s.rest) && s.rest && <option value={s.rest}>{s.rest}</option>}
+                            {REST_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </td>
                         <td className="py-1.5">
                           <button onClick={() => removeSet(i, si)} disabled={ex.sets.length <= 1} className="rounded p-1 text-ink-400 hover:bg-rose-500/15 hover:text-rose-400 disabled:opacity-30" aria-label="Remove set"><X className="h-3.5 w-3.5" /></button>
                         </td>
