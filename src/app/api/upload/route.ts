@@ -40,8 +40,16 @@ export async function POST(req: NextRequest) {
     const ext = contentType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
     const key = `progress/${user.email.replace(/[^a-z0-9]/gi, "_")}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-    const blob = await put(key, buffer, { access: "public", contentType, token });
-    return NextResponse.json({ url: blob.url, stored: true });
+    try {
+      const blob = await put(key, buffer, { access: "public", contentType, token });
+      return NextResponse.json({ url: blob.url, stored: true });
+    } catch (e) {
+      // Store configured with private access: upload privately and hand back a
+      // URL that streams through our authenticated /api/media proxy.
+      if (!(e instanceof Error) || !/private/i.test(e.message)) throw e;
+      await put(key, buffer, { access: "private", contentType, token });
+      return NextResponse.json({ url: `/api/media?path=${encodeURIComponent(key)}`, stored: true });
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Upload failed.";
     return NextResponse.json({ error: message }, { status: 502 });

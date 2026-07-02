@@ -41,8 +41,16 @@ export async function POST(req: NextRequest) {
     if (buffer.byteLength === 0) return NextResponse.json({ error: "No file received." }, { status: 400 });
     const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const key = `formcheck/${user.email.replace(/[^a-z0-9]/gi, "_")}/${Date.now()}-${safeName}`;
-    const blob = await put(key, buffer, { access: "public", contentType, token });
-    return NextResponse.json({ url: blob.url, name });
+    try {
+      const blob = await put(key, buffer, { access: "public", contentType, token });
+      return NextResponse.json({ url: blob.url, name });
+    } catch (e) {
+      // Store configured with private access: upload privately and hand back a
+      // URL that streams through our authenticated /api/media proxy.
+      if (!(e instanceof Error) || !/private/i.test(e.message)) throw e;
+      await put(key, buffer, { access: "private", contentType, token });
+      return NextResponse.json({ url: `/api/media?path=${encodeURIComponent(key)}`, name });
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : "Upload failed.";
     return NextResponse.json({ error: message }, { status: 502 });
