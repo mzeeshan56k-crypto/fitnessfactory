@@ -50,8 +50,6 @@ export function VideoUpload({
       const blob = await upload(`${pathPrefix}/${Date.now()}-${safeName}`, file, {
         access: "public",
         handleUploadUrl: "/api/upload/video",
-        // Split large clips into parts, upload in parallel, and retry failures.
-        multipart: true,
         onUploadProgress: ({ percentage }) => setProgress(Math.round(percentage)),
       });
       onUploaded(blob.url, file.name);
