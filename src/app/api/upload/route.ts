@@ -4,7 +4,9 @@ import { getSessionUser } from "@/lib/auth/accounts";
 
 export const runtime = "nodejs";
 
-const token = process.env.BLOB_READ_WRITE_TOKEN;
+// Sanitize: env values pasted from Vercel's `.env.local` snippet can include
+// surrounding quotes/whitespace, which invalidates the token.
+const token = (process.env.BLOB_READ_WRITE_TOKEN || "").trim().replace(/^["']|["']$/g, "") || undefined;
 
 // Accepts a compact JPEG data URL and stores the image. In production it uploads
 // to Vercel Blob and returns a short public URL; without a Blob token it returns

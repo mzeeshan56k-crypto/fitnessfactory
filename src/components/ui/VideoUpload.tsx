@@ -52,9 +52,11 @@ export function VideoUpload({
       onUploaded(blob.url, file.name);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Upload failed. Please try again.";
+      const setupMsg =
+        "Video upload isn't set up correctly. Admin: in Vercel → Project → Settings → Environment Variables, make sure BLOB_READ_WRITE_TOKEN is set to the token from the Blob store's .env.local tab (no surrounding quotes), then redeploy.";
       setError(
-        message.includes("Failed to retrieve the client token")
-          ? "Video upload isn't set up yet. Ask your admin to enable it: Vercel dashboard → Storage → Create Database → Blob → Connect to this project, then redeploy."
+        message.includes("Failed to retrieve the client token") || message.includes("Access denied")
+          ? setupMsg
           : message,
       );
     } finally {
