@@ -26,6 +26,7 @@ export function VideoUpload({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
 
@@ -33,6 +34,7 @@ export function VideoUpload({
     if (!file) return;
     setUploading(true);
     setError("");
+    setProgress(0);
     setFileName(file.name);
     try {
       // Check first so we can show an actionable message instead of Blob's
@@ -48,6 +50,9 @@ export function VideoUpload({
       const blob = await upload(`${pathPrefix}/${Date.now()}-${safeName}`, file, {
         access: "public",
         handleUploadUrl: "/api/upload/video",
+        // Split large clips into parts, upload in parallel, and retry failures.
+        multipart: true,
+        onUploadProgress: ({ percentage }) => setProgress(Math.round(percentage)),
       });
       onUploaded(blob.url, file.name);
     } catch (e) {
@@ -81,8 +86,18 @@ export function VideoUpload({
         className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
       >
         {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
-        {uploading ? `Uploading ${fileName}…` : label}
+        {uploading
+          ? `Uploading ${progress}%${fileName ? ` · ${fileName.length > 28 ? fileName.slice(0, 28) + "…" : fileName}` : ""}`
+          : label}
       </button>
+      {uploading && (
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ink-200">
+          <div
+            className="h-full rounded-full bg-brand-500 transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
       {error && (
         <div className="mt-2 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
