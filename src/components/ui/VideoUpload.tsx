@@ -45,24 +45,38 @@ export function VideoUpload({
         );
       }
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      // NOTE: deliberately NO onUploadProgress. Passing it makes the SDK use a
-      // streaming fetch upload (duplex: "half") that hangs at ~99% in many
-      // browser/network setups. Omitting it uses a plain, reliable upload — we
-      // trade the live percentage for uploads that actually finish.
-      const blob = await upload(`${pathPrefix}/${Date.now()}-${safeName}`, file, {
-        access: "public",
-        handleUploadUrl: "/api/upload/video",
-      });
+      // NOTE: deliberately NO onUploadProgress — passing it makes the SDK use a
+      // streaming fetch upload (duplex: "half") that hangs at ~99%. multipart
+      // splits the file into parts uploaded in parallel with retries (the
+      // recommended path for large media). A generous timeout surfaces a real
+      // error instead of hanging forever if the network stalls.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8 * 60 * 1000); // 8 min
+      let blob;
+      try {
+        blob = await upload(`${pathPrefix}/${Date.now()}-${safeName}`, file, {
+          access: "public",
+          handleUploadUrl: "/api/upload/video",
+          multipart: true,
+          abortSignal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
       onUploaded(blob.url, file.name);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Upload failed. Please try again.";
       const setupMsg =
         "Video upload isn't set up correctly. Admin: in Vercel → Project → Settings → Environment Variables, make sure BLOB_READ_WRITE_TOKEN is set to the token from the Blob store's .env.local tab (no surrounding quotes), then redeploy.";
-      setError(
-        message.includes("Failed to retrieve the client token") || message.includes("Access denied")
-          ? setupMsg
-          : message,
-      );
+      if (message.includes("aborted") || message.includes("AbortError")) {
+        setError("Upload timed out. Try a shorter/smaller clip or a stronger connection, then try again.");
+      } else {
+        setError(
+          message.includes("Failed to retrieve the client token") || message.includes("Access denied")
+            ? setupMsg
+            : message,
+        );
+      }
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
