@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  ScanLine, Clock, CheckCircle2, UserPlus, Upload,
+  ScanLine, Clock, CheckCircle2, UserPlus, Upload, Trash2,
 } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { EmptyState, Field } from "@/components/ui/Modal";
@@ -141,7 +141,21 @@ export default function ClientFormCheckPage() {
                         </p>
                       </div>
                     </div>
-                    <span className={cn("badge", meta.tint)}>{meta.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("badge", meta.tint)}>{meta.label}</span>
+                      <button
+                        onClick={() => {
+                          if (confirm("Delete this video? " + (r.adHoc ? "The submission will be removed." : "The task will go back to “upload needed” so you can re-record."))) {
+                            app.removeFormCheckSubmission(client.id, r.id);
+                          }
+                        }}
+                        className="shrink-0 text-ink-300 transition hover:text-rose-400"
+                        aria-label="Delete video"
+                        title="Delete video"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   {r.videoUrl && (
                     <div className="mt-3">

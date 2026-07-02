@@ -1,18 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { put as blobClientPut } from "@vercel/blob/client";
 import { Video, Loader2, AlertCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Vercel serverless request-body cap is ~4.5MB; keep a safe margin.
-const MAX_BYTES = 4 * 1024 * 1024;
+// Vercel serverless request-body cap is ~4.5MB. Files at or under this go
+// through our own server route (simplest, most reliable); anything larger
+// uploads straight to Vercel Blob with a server-issued client token.
+const SERVER_ROUTE_MAX_BYTES = 4 * 1024 * 1024;
+const MAX_BYTES = 2 * 1024 * 1024 * 1024; // 2GB hard ceiling
 
-/**
- * Uploads a video by POSTing the raw file to our own /api/upload/video route,
- * which pushes it to Vercel Blob with a plain server-side put(). This is the
- * same reliable path the image upload uses — no client-side Blob token
- * handshake or streaming upload (both of which stalled in the browser).
- */
 export function VideoUpload({
   onUploaded,
   label = "Upload video",
@@ -28,31 +26,71 @@ export function VideoUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
+  // null = indeterminate (small-file path); number = real percentage.
+  const [percent, setPercent] = useState<number | null>(null);
+
+  // Small files: POST the raw file to our server, which stores it with a
+  // plain put(). Proven reliable, but capped by the serverless body limit.
+  async function uploadViaServer(file: File): Promise<string> {
+    const res = await fetch(`/api/upload/video?name=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      headers: { "Content-Type": file.type || "video/mp4" },
+      body: file,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Upload failed. Please try again.");
+    if (!data.url) throw new Error("Upload failed — no URL returned.");
+    return data.url as string;
+  }
+
+  // Large files: get a scoped client token from our server, then upload
+  // straight to Vercel Blob (multipart: parallel parts, automatic retries).
+  async function uploadDirect(file: File): Promise<string> {
+    const tokenRes = await fetch("/api/upload/video/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name }),
+    });
+    const tokenData = await tokenRes.json().catch(() => ({}));
+    if (!tokenRes.ok) throw new Error(tokenData?.error || "Could not prepare the upload.");
+
+    const { clientToken, pathname, access } = tokenData as {
+      clientToken: string;
+      pathname: string;
+      access: "public" | "private";
+    };
+    setPercent(0);
+    const blob = await blobClientPut(pathname, file, {
+      access,
+      token: clientToken,
+      contentType: file.type || "video/mp4",
+      multipart: true,
+      onUploadProgress: ({ percentage }) => setPercent(Math.min(99, Math.round(percentage))),
+    });
+    // Private stores can't serve blobs by URL — stream through our authed proxy.
+    return access === "private" ? `/api/media?path=${encodeURIComponent(pathname)}` : blob.url;
+  }
 
   async function handle(file?: File) {
     if (!file) return;
     setError("");
     if (file.size > MAX_BYTES) {
-      setError(`That video is ${(file.size / 1024 / 1024).toFixed(1)}MB. Please upload a clip under 4MB (trim it or lower the resolution).`);
+      setError(`That video is ${(file.size / 1024 / 1024 / 1024).toFixed(1)}GB. Please keep clips under 2GB.`);
       if (inputRef.current) inputRef.current.value = "";
       return;
     }
     setUploading(true);
     setFileName(file.name);
+    setPercent(null);
     try {
-      const res = await fetch(`/api/upload/video?name=${encodeURIComponent(file.name)}`, {
-        method: "POST",
-        headers: { "Content-Type": file.type || "video/mp4" },
-        body: file,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Upload failed. Please try again.");
-      if (!data.url) throw new Error("Upload failed — no URL returned.");
-      onUploaded(data.url, file.name);
+      const url =
+        file.size <= SERVER_ROUTE_MAX_BYTES ? await uploadViaServer(file) : await uploadDirect(file);
+      onUploaded(url, file.name);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
     } finally {
       setUploading(false);
+      setPercent(null);
       if (inputRef.current) inputRef.current.value = "";
     }
   }
@@ -74,12 +112,19 @@ export function VideoUpload({
       >
         {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
         {uploading
-          ? `Uploading${fileName ? ` ${fileName.length > 26 ? fileName.slice(0, 26) + "…" : fileName}` : ""}…`
+          ? `Uploading${percent !== null ? ` ${percent}%` : ""}${fileName ? ` — ${fileName.length > 22 ? fileName.slice(0, 22) + "…" : fileName}` : ""}`
           : label}
       </button>
       {uploading && (
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ink-200">
-          <div className="h-full w-1/3 animate-indeterminate rounded-full bg-brand-500" />
+          {percent !== null ? (
+            <div
+              className="h-full rounded-full bg-brand-500 transition-[width] duration-300"
+              style={{ width: `${Math.max(percent, 2)}%` }}
+            />
+          ) : (
+            <div className="h-full w-1/3 animate-indeterminate rounded-full bg-brand-500" />
+          )}
         </div>
       )}
       {error && (
@@ -101,6 +146,7 @@ export function VideoPreview({ url, className }: { url: string; className?: stri
     <video
       src={url}
       controls
+      preload="metadata"
       className={cn("w-full rounded-2xl border border-ink-200 bg-black", className)}
     />
   );

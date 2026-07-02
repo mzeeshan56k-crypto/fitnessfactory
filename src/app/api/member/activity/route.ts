@@ -35,6 +35,7 @@ interface FormCheckRequest {
   id: string; exercise: string; note?: string; requestedAt: string;
   status: "pending" | "submitted" | "reviewed";
   videoUrl?: string; videoName?: string; submittedAt?: string;
+  adHoc?: boolean; review?: unknown;
 }
 interface WsClient {
   id: string; email: string;
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     kind?:
       | "message" | "checkin" | "workout" | "photo" | "photo-remove" | "nutrition" | "weight"
       | "appointment" | "appointment-remove" | "appointment-book" | "community" | "challenges" | "classes"
-      | "formcheck-submit";
+      | "formcheck-submit" | "formcheck-remove";
     text?: string;
     answers?: Record<string, string | number>;
     formId?: string;
@@ -265,11 +266,24 @@ export async function POST(req: NextRequest) {
       : [
           {
             id: uid("fcr"), exercise: String(video.exercise || "Form check").trim() || "Form check",
-            requestedAt: now, status: "submitted" as const,
+            requestedAt: now, status: "submitted" as const, adHoc: true,
             videoUrl: String(video.url), videoName: video.name, submittedAt: now,
           },
           ...list,
         ];
+    ws.formCheckRequests = { ...(ws.formCheckRequests ?? {}), [mine.id]: next };
+  } else if (body.kind === "formcheck-remove") {
+    // Member deletes a mistaken upload: ad-hoc submissions are removed
+    // entirely; coach-requested tasks revert to "pending" so they can re-record.
+    const list = ws.formCheckRequests?.[mine.id] ?? [];
+    const next = list
+      .map((r) => {
+        if (r.id !== body.requestId) return r;
+        if (r.adHoc) return null;
+        const { videoUrl: _u, videoName: _n, submittedAt: _s, review: _r, ...rest } = r;
+        return { ...rest, status: "pending" as const };
+      })
+      .filter((r): r is FormCheckRequest => r !== null);
     ws.formCheckRequests = { ...(ws.formCheckRequests ?? {}), [mine.id]: next };
   } else {
     return NextResponse.json({ error: "Unknown activity." }, { status: 400 });

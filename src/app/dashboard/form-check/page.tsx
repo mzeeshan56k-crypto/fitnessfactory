@@ -459,9 +459,8 @@ export default function FormCheckPage() {
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Needs review</p>
                 <div className="space-y-2">
                   {needsReview.map((r) => (
-                    <button
+                    <div
                       key={r.id}
-                      onClick={() => reviewSubmission(r.id)}
                       className={cn(
                         "flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition",
                         activeRequestId === r.id
@@ -469,10 +468,28 @@ export default function FormCheckPage() {
                           : "border-ink-200 bg-ink-50 hover:border-brand-300",
                       )}
                     >
-                      <Film className="h-4 w-4 shrink-0 text-brand-400" />
-                      <span className="min-w-0 flex-1 truncate text-ink-800">{r.exercise}</span>
-                      <span className="badge shrink-0 bg-brand-500/15 text-brand-400">New</span>
-                    </button>
+                      <button
+                        onClick={() => reviewSubmission(r.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
+                        <Film className="h-4 w-4 shrink-0 text-brand-400" />
+                        <span className="min-w-0 flex-1 truncate text-ink-800">{r.exercise}</span>
+                        <span className="badge shrink-0 bg-brand-500/15 text-brand-400">New</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm("Delete this submission and its video?")) {
+                            if (activeRequestId === r.id) setActiveRequestId(null);
+                            app.removeFormCheckRequest(activeClientId, r.id);
+                          }
+                        }}
+                        className="shrink-0 text-ink-300 transition hover:text-rose-400"
+                        aria-label="Delete submission"
+                        title="Delete submission"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -507,6 +524,18 @@ export default function FormCheckPage() {
                     <div key={r.id} className="flex items-center gap-2 rounded-xl border border-ink-100 px-3 py-2 text-sm text-ink-500">
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-accent-400" />
                       <span className="min-w-0 flex-1 truncate">{r.exercise}</span>
+                      <button
+                        onClick={() => {
+                          if (confirm("Delete this reviewed submission and its video?")) {
+                            app.removeFormCheckRequest(activeClientId, r.id);
+                          }
+                        }}
+                        className="shrink-0 text-ink-300 transition hover:text-rose-400"
+                        aria-label="Delete submission"
+                        title="Delete submission"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>

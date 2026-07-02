@@ -226,6 +226,8 @@ export interface FormCheckRequest {
   videoUrl?: string;
   videoName?: string;
   submittedAt?: string;
+  // True when the client uploaded on their own (not fulfilling a coach request).
+  adHoc?: boolean;
   // Coach feedback, attached when the review is saved so the client sees it in
   // their portal (unlike FormReview, which stays coach-private).
   review?: {

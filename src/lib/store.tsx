@@ -19,6 +19,13 @@ export function uid(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+// Fire-and-forget: free the stored blob when a form-check video is deleted.
+// The workspace record is the source of truth, so a failed cleanup only leaks
+// storage — never breaks the UI.
+function deleteStoredVideo(url: string) {
+  fetch(`/api/media?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {});
+}
+
 export interface AppSettings {
   trainerName: string;
   trainerEmail: string;
@@ -212,6 +219,8 @@ interface AppContextValue extends DB {
     video: { url: string; name?: string; exercise: string },
   ) => void;
   markFormCheckReviewed: (clientId: string, id: string, review?: FormCheckRequest["review"]) => void;
+  // member deletes a mistaken upload (coach tasks revert to pending; ad-hoc uploads are removed)
+  removeFormCheckSubmission: (clientId: string, requestId: string) => void;
   // assignment (coach → client)
   toggleAssignedWorkout: (clientId: string, workoutId: string) => void;
   toggleAssignedForm: (clientId: string, formId: string) => void;
@@ -892,11 +901,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       formCheckRequests: { ...d.formCheckRequests, [clientId]: [req, ...(d.formCheckRequests[clientId] ?? [])] },
     }));
   }, []);
-  const removeFormCheckRequest = useCallback((clientId: string, id: string) =>
+  const removeFormCheckRequest = useCallback((clientId: string, id: string) => {
+    const existing = (dbRef.current.formCheckRequests[clientId] ?? []).find((r) => r.id === id);
+    if (existing?.videoUrl) deleteStoredVideo(existing.videoUrl);
     setDb((d) => ({
       ...d,
       formCheckRequests: { ...d.formCheckRequests, [clientId]: (d.formCheckRequests[clientId] ?? []).filter((r) => r.id !== id) },
-    })), []);
+    }));
+  }, []);
   // Member submits a video, either fulfilling a specific pending request or
   // (requestId === null) creating a new ad-hoc submission on their own.
   const submitFormCheckVideo = useCallback((
@@ -916,7 +928,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         : [
             {
               id: uid("fcr"), exercise: video.exercise.trim() || "Form check",
-              requestedAt: now, status: "submitted" as const,
+              requestedAt: now, status: "submitted" as const, adHoc: true,
               videoUrl: video.url, videoName: video.name, submittedAt: now,
             },
             ...list,
@@ -925,6 +937,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     if (sessionRef.current?.role === "member") {
       memberSync({ kind: "formcheck-submit", requestId, video });
+    }
+  }, [memberSync]);
+  // Member deletes a video they uploaded by mistake. A coach-requested task
+  // reverts to "pending" (so they can re-record); an ad-hoc upload is removed
+  // entirely. The stored blob is deleted in the background either way.
+  const removeFormCheckSubmission = useCallback((clientId: string, requestId: string) => {
+    const existing = (dbRef.current.formCheckRequests[clientId] ?? []).find((r) => r.id === requestId);
+    if (existing?.videoUrl) deleteStoredVideo(existing.videoUrl);
+    setDb((d) => {
+      const list = d.formCheckRequests[clientId] ?? [];
+      const next = list
+        .map((r) => {
+          if (r.id !== requestId) return r;
+          if (r.adHoc) return null;
+          const { videoUrl: _u, videoName: _n, submittedAt: _s, review: _r, ...rest } = r;
+          return { ...rest, status: "pending" as const };
+        })
+        .filter((r): r is FormCheckRequest => r !== null);
+      return { ...d, formCheckRequests: { ...d.formCheckRequests, [clientId]: next } };
+    });
+    if (sessionRef.current?.role === "member") {
+      memberSync({ kind: "formcheck-remove", requestId });
     }
   }, [memberSync]);
   // Coach marks a submission as reviewed, attaching the feedback so the client
@@ -1097,7 +1131,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     resolveSuggestion,
     addCheckin,
     addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
-    requestFormCheck, removeFormCheckRequest, submitFormCheckVideo, markFormCheckReviewed,
+    requestFormCheck, removeFormCheckRequest, submitFormCheckVideo, markFormCheckReviewed, removeFormCheckSubmission,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser,
@@ -1112,7 +1146,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addCommunityPost, toggleCommunityLike, addCommunityComment, removeCommunityPost,
     addClass, removeClass, toggleClassEnroll,
     resolveSuggestion, addCheckin, addFormReview, deleteFormReview, addClientNote, setRecoveryNote,
-    requestFormCheck, removeFormCheckRequest, submitFormCheckVideo, markFormCheckReviewed,
+    requestFormCheck, removeFormCheckRequest, submitFormCheckVideo, markFormCheckReviewed, removeFormCheckSubmission,
     toggleAssignedWorkout, toggleAssignedForm, setClientProgram, setClientMealPlan, completeWorkout,
     addPhoto, removePhoto, setNutritionLog, logWeight, assignCoach, refresh,
     addUser, updateUser, removeUser, addBroadcast, updateSettings,
