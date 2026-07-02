@@ -53,10 +53,11 @@ export async function POST(req: NextRequest) {
         maximumSizeInBytes: 500 * 1024 * 1024, // 500MB
         tokenPayload: JSON.stringify({ email: user.email }),
       }),
-      onUploadCompleted: async () => {
-        // No server-side bookkeeping needed — the client records the resulting
-        // URL via the member activity endpoint once the upload finishes.
-      },
+      // NOTE: intentionally NO onUploadCompleted. When set, Vercel Blob calls
+      // this route back server-to-server after the upload, and the client waits
+      // for that to succeed — which stalls at ~99% on deployment-protected
+      // preview URLs the callback can't reach. We record the resulting URL
+      // client-side (via the member activity endpoint) instead.
     });
     return NextResponse.json(jsonResponse);
   } catch (e) {
