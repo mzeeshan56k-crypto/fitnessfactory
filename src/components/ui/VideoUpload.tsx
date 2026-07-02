@@ -26,7 +26,6 @@ export function VideoUpload({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
 
@@ -34,7 +33,6 @@ export function VideoUpload({
     if (!file) return;
     setUploading(true);
     setError("");
-    setProgress(0);
     setFileName(file.name);
     try {
       // Check first so we can show an actionable message instead of Blob's
@@ -47,10 +45,13 @@ export function VideoUpload({
         );
       }
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      // NOTE: deliberately NO onUploadProgress. Passing it makes the SDK use a
+      // streaming fetch upload (duplex: "half") that hangs at ~99% in many
+      // browser/network setups. Omitting it uses a plain, reliable upload — we
+      // trade the live percentage for uploads that actually finish.
       const blob = await upload(`${pathPrefix}/${Date.now()}-${safeName}`, file, {
         access: "public",
         handleUploadUrl: "/api/upload/video",
-        onUploadProgress: ({ percentage }) => setProgress(Math.round(percentage)),
       });
       onUploaded(blob.url, file.name);
     } catch (e) {
@@ -85,16 +86,18 @@ export function VideoUpload({
       >
         {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
         {uploading
-          ? `Uploading ${progress}%${fileName ? ` · ${fileName.length > 28 ? fileName.slice(0, 28) + "…" : fileName}` : ""}`
+          ? `Uploading${fileName ? ` ${fileName.length > 26 ? fileName.slice(0, 26) + "…" : fileName}` : ""}…`
           : label}
       </button>
       {uploading && (
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ink-200">
-          <div
-            className="h-full rounded-full bg-brand-500 transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+        <>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ink-200">
+            <div className="h-full w-1/3 animate-indeterminate rounded-full bg-brand-500" />
+          </div>
+          <p className="mt-1 text-center text-xs text-ink-400">
+            Large videos can take a minute — please keep this tab open.
+          </p>
+        </>
       )}
       {error && (
         <div className="mt-2 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">

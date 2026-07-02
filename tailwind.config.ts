@@ -44,10 +44,12 @@ const config: Config = {
       keyframes: {
         "fade-up": { "0%": { opacity: "0", transform: "translateY(12px)" }, "100%": { opacity: "1", transform: "translateY(0)" } },
         "fade-in": { "0%": { opacity: "0" }, "100%": { opacity: "1" } },
+        indeterminate: { "0%": { transform: "translateX(-120%)" }, "100%": { transform: "translateX(320%)" } },
       },
       animation: {
         "fade-up": "fade-up 0.6s ease-out both",
         "fade-in": "fade-in 0.8s ease-out both",
+        indeterminate: "indeterminate 1.2s ease-in-out infinite",
       },
     },
   },
