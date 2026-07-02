@@ -255,7 +255,17 @@ export default function FormCheckPage() {
       videoName: activeRequest?.videoName,
     };
     app.addFormReview(activeClientId, review);
-    if (activeRequest) app.markFormCheckReviewed(activeClientId, activeRequest.id);
+    // Attach the feedback to the request itself so the client sees it in
+    // their Form Check section.
+    if (activeRequest) {
+      app.markFormCheckReviewed(activeClientId, activeRequest.id, {
+        date: review.date,
+        faults: review.faults,
+        notes: review.notes || undefined,
+        weaknessSummary: summary,
+        analysis: analysis.trim() || undefined,
+      });
+    }
     // reset the working session
     setActiveRequestId(null);
     setFaults([]);

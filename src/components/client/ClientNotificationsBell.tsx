@@ -48,6 +48,7 @@ export function ClientNotificationsBell() {
   const nextAppt = client ? app.appointments.find((a) => a.clientId === client.id) : undefined;
   const liveClasses = client ? app.classes.filter((c) => c.type === "live") : [];
   const pendingFormChecks = client ? (app.formCheckRequests[client.id] ?? []).filter((r) => r.status === "pending") : [];
+  const reviewedFormChecks = client ? (app.formCheckRequests[client.id] ?? []).filter((r) => r.status === "reviewed" && r.review) : [];
 
   const items: Item[] = [];
   // Assigned training program (shows the moment a coach assigns one).
@@ -77,6 +78,9 @@ export function ClientNotificationsBell() {
   }
   for (const r of pendingFormChecks) {
     items.push({ id: "fcr_" + r.id, icon: ScanLine, tint: "bg-amber-500/15 text-amber-500", title: `Form check requested: ${r.exercise}`, sub: r.note || "Upload a clip for your coach to review", href: "/client/form-check" });
+  }
+  for (const r of reviewedFormChecks) {
+    items.push({ id: "fcv_" + r.id, icon: ScanLine, tint: "bg-accent-500/15 text-accent-500", title: `Coach reviewed your ${r.exercise}`, sub: r.review?.notes || "Tap to read your coach's feedback", href: "/client/form-check" });
   }
 
   const seenSet = new Set(seen);

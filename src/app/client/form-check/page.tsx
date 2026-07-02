@@ -148,6 +148,49 @@ export default function ClientFormCheckPage() {
                       <VideoPreview url={r.videoUrl} className="max-h-72" />
                     </div>
                   )}
+                  {r.status === "reviewed" && r.review && (
+                    <div className="mt-3 rounded-2xl border border-accent-500/30 bg-accent-500/10 p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-accent-500">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Coach&rsquo;s review
+                        <span className="ml-auto text-xs font-normal text-ink-400">
+                          {new Date(r.review.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        </span>
+                      </div>
+                      {r.review.faults.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {r.review.faults.map((f) => (
+                            <span key={f} className="badge bg-amber-500/15 text-amber-500">{f}</span>
+                          ))}
+                        </div>
+                      )}
+                      {r.review.notes && (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Coach&rsquo;s remarks</p>
+                          <p className="mt-1 text-sm leading-relaxed text-ink-800">{r.review.notes}</p>
+                        </div>
+                      )}
+                      {r.review.analysis && (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Technique analysis</p>
+                          <p className="mt-1 text-sm leading-relaxed text-ink-700">{r.review.analysis}</p>
+                        </div>
+                      )}
+                      {r.review.weaknessSummary.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Focus areas</p>
+                          <ul className="mt-1 space-y-1">
+                            {r.review.weaknessSummary.map((b, i) => (
+                              <li key={i} className="flex gap-2 text-sm text-ink-700">
+                                <span className="mt-0.5 text-accent-500">●</span>
+                                <span>{b}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

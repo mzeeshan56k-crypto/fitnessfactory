@@ -211,7 +211,7 @@ interface AppContextValue extends DB {
     requestId: string | null,
     video: { url: string; name?: string; exercise: string },
   ) => void;
-  markFormCheckReviewed: (clientId: string, id: string) => void;
+  markFormCheckReviewed: (clientId: string, id: string, review?: FormCheckRequest["review"]) => void;
   // assignment (coach → client)
   toggleAssignedWorkout: (clientId: string, workoutId: string) => void;
   toggleAssignedForm: (clientId: string, formId: string) => void;
@@ -927,13 +927,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       memberSync({ kind: "formcheck-submit", requestId, video });
     }
   }, [memberSync]);
-  // Coach marks a submission as reviewed (paired with saving a FormReview).
-  const markFormCheckReviewed = useCallback((clientId: string, id: string) =>
+  // Coach marks a submission as reviewed, attaching the feedback so the client
+  // sees it in their portal (paired with saving a coach-private FormReview).
+  const markFormCheckReviewed = useCallback((clientId: string, id: string, review?: FormCheckRequest["review"]) =>
     setDb((d) => ({
       ...d,
       formCheckRequests: {
         ...d.formCheckRequests,
-        [clientId]: (d.formCheckRequests[clientId] ?? []).map((r) => (r.id === id ? { ...r, status: "reviewed" as const } : r)),
+        [clientId]: (d.formCheckRequests[clientId] ?? []).map((r) =>
+          r.id === id ? { ...r, status: "reviewed" as const, ...(review ? { review } : {}) } : r),
       },
     })), []);
   const addClientNote = useCallback((clientId: string, note: ClientNote) =>

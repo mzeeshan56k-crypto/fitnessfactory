@@ -226,6 +226,15 @@ export interface FormCheckRequest {
   videoUrl?: string;
   videoName?: string;
   submittedAt?: string;
+  // Coach feedback, attached when the review is saved so the client sees it in
+  // their portal (unlike FormReview, which stays coach-private).
+  review?: {
+    date: string; // ISO
+    faults: string[];
+    notes?: string;
+    weaknessSummary: string[];
+    analysis?: string;
+  };
 }
 
 // What a coach has assigned to a specific client.
