@@ -1,28 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { put } from "@vercel/blob";
 import { getSessionUser } from "@/lib/auth/accounts";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
-// Read the Blob read-write token defensively: env values pasted from Vercel's
-// `.env.local` snippet often include surrounding quotes/whitespace, which makes
-// the token invalid and produces "Access denied, please provide a valid token".
+// Sanitize: env values pasted from Vercel's `.env.local` snippet can include
+// surrounding quotes/whitespace, which invalidates the token.
 function blobToken(): string {
   return (process.env.BLOB_READ_WRITE_TOKEN || "").trim().replace(/^["']|["']$/g, "");
 }
 
-// Lets the client check whether video upload is usable before attempting one,
-// so it can show a clear message instead of Blob's generic client-side error.
+// Readiness check so the client can show a clear message if storage isn't set up.
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   return NextResponse.json({ configured: Boolean(blobToken()) });
 }
 
-// Two-step token handshake for direct-to-Blob uploads. The actual video bytes
-// go straight from the browser to Vercel Blob storage — never through this
-// serverless function or the shared workspace document — so large clips don't
-// hit request-body limits or bloat the app's live-synced JSON state.
+// Server-side upload: the browser POSTs the raw file and we push it to Vercel
+// Blob with a plain put(). This is the same reliable path the image upload uses
+// — no client-side token handshake or streaming that stalls in the browser.
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
@@ -30,38 +28,23 @@ export async function POST(req: NextRequest) {
   const token = blobToken();
   if (!token) {
     return NextResponse.json(
-      { error: "Video upload isn't configured yet. Ask your admin to enable storage (BLOB_READ_WRITE_TOKEN)." },
+      { error: "Video upload isn't configured yet. Ask your admin to enable Vercel Blob storage (BLOB_READ_WRITE_TOKEN)." },
       { status: 503 },
     );
   }
 
-  const body = (await req.json()) as HandleUploadBody;
+  const name = req.nextUrl.searchParams.get("name") || "video.mp4";
+  const contentType = req.headers.get("content-type") || "video/mp4";
+
   try {
-    const jsonResponse = await handleUpload({
-      body,
-      request: req,
-      // Pass the sanitized token explicitly so client tokens are signed with a
-      // valid read-write token (not an OIDC context that may lack write scope).
-      token,
-      onBeforeGenerateToken: async () => ({
-        // Broad but concrete — no wildcards, which some Blob versions reject.
-        allowedContentTypes: [
-          "video/mp4", "video/quicktime", "video/webm", "video/x-msvideo",
-          "video/x-matroska", "video/3gpp", "video/ogg", "video/mpeg",
-        ],
-        addRandomSuffix: true,
-        maximumSizeInBytes: 500 * 1024 * 1024, // 500MB
-        tokenPayload: JSON.stringify({ email: user.email }),
-      }),
-      // NOTE: intentionally NO onUploadCompleted. When set, Vercel Blob calls
-      // this route back server-to-server after the upload, and the client waits
-      // for that to succeed — which stalls at ~99% on deployment-protected
-      // preview URLs the callback can't reach. We record the resulting URL
-      // client-side (via the member activity endpoint) instead.
-    });
-    return NextResponse.json(jsonResponse);
+    const buffer = Buffer.from(await req.arrayBuffer());
+    if (buffer.byteLength === 0) return NextResponse.json({ error: "No file received." }, { status: 400 });
+    const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const key = `formcheck/${user.email.replace(/[^a-z0-9]/gi, "_")}/${Date.now()}-${safeName}`;
+    const blob = await put(key, buffer, { access: "public", contentType, token });
+    return NextResponse.json({ url: blob.url, name });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Upload failed.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

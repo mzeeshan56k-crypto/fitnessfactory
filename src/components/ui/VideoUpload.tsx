@@ -1,28 +1,28 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
 import { Video, Loader2, AlertCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Vercel serverless request-body cap is ~4.5MB; keep a safe margin.
+const MAX_BYTES = 4 * 1024 * 1024;
+
 /**
- * Uploads a video file straight to Vercel Blob storage from the browser
- * (bypassing our API routes and the shared workspace document — videos can be
- * tens of MB, far too large to embed in synced JSON state). Requires
- * BLOB_READ_WRITE_TOKEN to be configured server-side; shows a clear message
- * if it isn't.
+ * Uploads a video by POSTing the raw file to our own /api/upload/video route,
+ * which pushes it to Vercel Blob with a plain server-side put(). This is the
+ * same reliable path the image upload uses — no client-side Blob token
+ * handshake or streaming upload (both of which stalled in the browser).
  */
 export function VideoUpload({
-  pathPrefix,
   onUploaded,
   label = "Upload video",
   className,
 }: {
-  /** Folder the clip is stored under, e.g. `formcheck/${clientId}`. */
-  pathPrefix: string;
   onUploaded: (url: string, name: string) => void;
   label?: string;
   className?: string;
+  /** Accepted for backwards-compat; the server derives the storage path. */
+  pathPrefix?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -31,52 +31,26 @@ export function VideoUpload({
 
   async function handle(file?: File) {
     if (!file) return;
-    setUploading(true);
     setError("");
+    if (file.size > MAX_BYTES) {
+      setError(`That video is ${(file.size / 1024 / 1024).toFixed(1)}MB. Please upload a clip under 4MB (trim it or lower the resolution).`);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+    setUploading(true);
     setFileName(file.name);
     try {
-      // Check first so we can show an actionable message instead of Blob's
-      // generic "Failed to retrieve the client token" (it discards our
-      // server's actual error text whenever the handshake isn't a 200).
-      const status = await fetch("/api/upload/video").then((r) => r.json()).catch(() => null);
-      if (status && status.configured === false) {
-        throw new Error(
-          "Video upload isn't set up yet. Ask your admin to enable it: Vercel dashboard → Storage → Create Database → Blob → Connect to this project, then redeploy.",
-        );
-      }
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      // NOTE: deliberately NO onUploadProgress — passing it makes the SDK use a
-      // streaming fetch upload (duplex: "half") that hangs at ~99%. multipart
-      // splits the file into parts uploaded in parallel with retries (the
-      // recommended path for large media). A generous timeout surfaces a real
-      // error instead of hanging forever if the network stalls.
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8 * 60 * 1000); // 8 min
-      let blob;
-      try {
-        blob = await upload(`${pathPrefix}/${Date.now()}-${safeName}`, file, {
-          access: "public",
-          handleUploadUrl: "/api/upload/video",
-          multipart: true,
-          abortSignal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
-      onUploaded(blob.url, file.name);
+      const res = await fetch(`/api/upload/video?name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "video/mp4" },
+        body: file,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Upload failed. Please try again.");
+      if (!data.url) throw new Error("Upload failed — no URL returned.");
+      onUploaded(data.url, file.name);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Upload failed. Please try again.";
-      const setupMsg =
-        "Video upload isn't set up correctly. Admin: in Vercel → Project → Settings → Environment Variables, make sure BLOB_READ_WRITE_TOKEN is set to the token from the Blob store's .env.local tab (no surrounding quotes), then redeploy.";
-      if (message.includes("aborted") || message.includes("AbortError")) {
-        setError("Upload timed out. Try a shorter/smaller clip or a stronger connection, then try again.");
-      } else {
-        setError(
-          message.includes("Failed to retrieve the client token") || message.includes("Access denied")
-            ? setupMsg
-            : message,
-        );
-      }
+      setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -104,14 +78,9 @@ export function VideoUpload({
           : label}
       </button>
       {uploading && (
-        <>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ink-200">
-            <div className="h-full w-1/3 animate-indeterminate rounded-full bg-brand-500" />
-          </div>
-          <p className="mt-1 text-center text-xs text-ink-400">
-            Large videos can take a minute — please keep this tab open.
-          </p>
-        </>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ink-200">
+          <div className="h-full w-1/3 animate-indeterminate rounded-full bg-brand-500" />
+        </div>
       )}
       {error && (
         <div className="mt-2 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
